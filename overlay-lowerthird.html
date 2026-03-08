@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- MFCLIVE | © 2025 Besmir Pepa -->
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:transparent; font-family:'Arial Black',Arial,sans-serif; width:1920px; height:1080px; overflow:hidden; }
+
+  #lt {
+    position: absolute;
+    bottom: 110px; left: 0;
+    display: flex; align-items: stretch;
+    transform: translateX(-105%);
+    transition: transform 0.55s cubic-bezier(0.22,1,0.36,1);
+    filter: drop-shadow(0 6px 24px rgba(0,0,0,.7));
+  }
+  #lt.visible { transform: translateX(0); }
+
+  /* Blue leading edge — the "punch" of the entrance */
+  .lt-edge {
+    width: 6px;
+    background: #3D82F6;
+    flex-shrink: 0;
+  }
+
+  /* Icon block */
+  .lt-icon {
+    background: rgba(61,130,246,0.88);
+    backdrop-filter: blur(10px);
+    width: 80px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px;
+    flex-shrink: 0;
+  }
+
+  /* Text block */
+  .lt-body {
+    background: rgba(5,11,24,0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 14px 36px 14px 20px;
+    min-width: 340px;
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  }
+
+  .lt-line1 {
+    font-size: 44px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    line-height: 1.1;
+    text-shadow: 0 2px 10px rgba(0,0,0,.9);
+    white-space: nowrap;
+  }
+
+  .lt-line2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #7DB8F7;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 6px rgba(0,0,0,.7);
+    white-space: nowrap;
+  }
+
+  /* Thin accent line at the bottom */
+  .lt-foot {
+    position: absolute;
+    bottom: 109px; left: 0;
+    height: 2px;
+    width: 0;
+    background: linear-gradient(to right, #3D82F6, rgba(61,130,246,0));
+    transition: width 0.55s cubic-bezier(0.22,1,0.36,1) 0.1s;
+  }
+  .lt-foot.visible { width: 700px; }
+</style>
+</head>
+<body>
+<div id="lt">
+  <div class="lt-edge"></div>
+  <div class="lt-icon">⚽</div>
+  <div class="lt-body">
+    <div class="lt-line1" id="ltLine1">Player Name</div>
+    <div class="lt-line2" id="ltLine2">GOAL</div>
+  </div>
+</div>
+<div class="lt-foot" id="ltFoot"></div>
+<script>
+const es = new EventSource('/events');
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type !== 'state') return;
+  const lt   = document.getElementById('lt');
+  const foot = document.getElementById('ltFoot');
+  if (d.lowerThird.visible) {
+    document.getElementById('ltLine1').textContent = d.lowerThird.line1 || '';
+    document.getElementById('ltLine2').textContent = d.lowerThird.line2 || '';
+    lt.classList.add('visible');
+    foot.classList.add('visible');
+  } else {
+    lt.classList.remove('visible');
+    foot.classList.remove('visible');
+  }
+};
+</script>
+</body>
+</html>

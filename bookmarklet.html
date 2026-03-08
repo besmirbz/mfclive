@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MFCLIVE — Roster Loader</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#050B18; color:#fff; font-family:-apple-system,'Helvetica Neue',Arial,sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:30px; }
+  .card { max-width:600px; width:100%; }
+  h1 { font-size:20px; font-weight:900; letter-spacing:.08em; color:#7DB8F7; text-transform:uppercase; margin-bottom:6px; }
+  .sub { font-size:13px; color:rgba(255,255,255,.45); margin-bottom:32px; }
+  .step { display:flex; gap:14px; margin-bottom:22px; align-items:flex-start; }
+  .step-num { width:28px; height:28px; border-radius:50%; background:#3D82F6; color:#fff; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .step-body h3 { font-size:14px; font-weight:800; margin-bottom:4px; }
+  .step-body p { font-size:13px; color:rgba(255,255,255,.55); line-height:1.6; }
+  .step-body img-hint { display:block; font-size:11px; color:rgba(125,184,247,.4); margin-top:4px; }
+  code { background:#0d1829; border:1px solid rgba(61,130,246,.3); padding:2px 7px; border-radius:4px; font-size:12px; color:#7DB8F7; }
+  .copy-box { background:#0d1829; border:1px solid rgba(61,130,246,.35); border-radius:10px; padding:18px; margin:28px 0; }
+  .copy-box label { font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:#3D82F6; display:block; margin-bottom:10px; }
+  textarea { width:100%; background:#060e1c; border:1px solid rgba(61,130,246,.2); color:#7DB8F7; border-radius:6px; padding:10px 12px; font-size:11px; font-family:monospace; resize:none; height:80px; line-height:1.5; }
+  textarea:focus { outline:none; border-color:#3D82F6; }
+  .copy-btn { margin-top:10px; width:100%; background:#3D82F6; color:#fff; border:none; border-radius:7px; padding:12px; font-size:14px; font-weight:800; cursor:pointer; font-family:inherit; letter-spacing:.04em; transition:background .2s; }
+  .copy-btn:hover { background:#2d6fd4; }
+  .copy-btn.done { background:#22c55e; }
+  .divider { border:none; border-top:1px solid rgba(61,130,246,.15); margin:28px 0; }
+  .usage { background:#0d1829; border:1px solid rgba(61,130,246,.2); border-radius:10px; padding:18px; }
+  .usage h3 { font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#3D82F6; margin-bottom:12px; }
+  .usage li { font-size:13px; color:rgba(255,255,255,.6); line-height:1.9; margin-left:18px; }
+  .note { margin-top:12px; font-size:11px; color:rgba(255,255,255,.28); line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚽ MFCLIVE — Roster Loader</h1>
+  <p class="sub">One-click roster import from minfotboll.se — set up once, use forever &nbsp;·&nbsp; © 2025 Besmir Pepa</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h3>Copy the bookmarklet code</h3>
+      <p>Click the button below to copy it to your clipboard</p>
+    </div>
+  </div>
+
+  <div class="copy-box">
+    <label>Bookmarklet code — click Copy</label>
+    <textarea id="bmCode" readonly>javascript:(function(){var m=location.href.match(/(\d{6,})/);if(!m){alert('MFC Overlay: No game ID found. Open the game page on minfotboll.se first.');return;}var gameId=m[1];var base='https://minfotboll-api.azurewebsites.net/api';var s=document.createElement('div');s.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:#050B18;color:#7DB8F7;border:2px solid #3D82F6;border-radius:8px;padding:14px 20px;font-family:sans-serif;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5)';s.textContent='Fetching roster...';document.body.appendChild(s);Promise.all([fetch(base+'/followgameapi/initpubliclivetimelineblurbs?GameID='+gameId+'&SharedSecret=THIS_IS_MAGIC_VALUE').then(function(r){return r.json();}),fetch(base+'/magazinegameviewapi/initgamelineups?GameID='+gameId).then(function(r){return r.json();})]).then(function(results){var payload=btoa(unescape(encodeURIComponent(JSON.stringify({timeline:results[0],lineup:results[1]}))));s.textContent='Sending to overlay...';var f=document.createElement('form');f.method='POST';f.action='http://localhost:3000/import-roster';f.target='_blank';var i=document.createElement('textarea');i.name='data';i.value=payload;f.appendChild(i);document.body.appendChild(f);f.submit();setTimeout(function(){document.body.removeChild(f);document.body.removeChild(s);},3000);}).catch(function(e){s.style.borderColor='#ef4444';s.style.color='#ef4444';s.textContent='Error: '+e.message;setTimeout(function(){document.body.removeChild(s);},5000);});})();</textarea>
+    <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy to Clipboard</button>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h3>Show your bookmarks bar</h3>
+      <p>Press <code>Ctrl+Shift+B</code> in Chrome to show it if it's hidden</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h3>Create a new bookmark manually</h3>
+      <p>Right-click anywhere on the bookmarks bar → <strong>Add page</strong> (or "Add bookmark")<br>
+      Set the <strong>Name</strong> to <code>⚽ MFC Load Roster</code><br>
+      Set the <strong>URL</strong> field to the copied code → <strong>Save</strong></p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="usage">
+    <h3>Every game day</h3>
+    <ol>
+      <li>Start the server: <code>node server.js</code> on the stream PC</li>
+      <li>Log in to minfotboll.se and open the game page</li>
+      <li>Click <strong>⚽ MFC Load Roster</strong> in your bookmarks bar</li>
+      <li>A blue banner appears briefly, then a confirmation tab opens and closes</li>
+      <li>Overlays and controller update automatically ✓</li>
+    </ol>
+    <p class="note">The confirmation tab may be blocked by Chrome's popup blocker the first time — if so, click "Allow" in the address bar and retry.</p>
+  </div>
+</div>
+<script>
+function copyCode() {
+  const ta = document.getElementById('bmCode');
+  ta.select();
+  ta.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('done');
+    setTimeout(() => { btn.textContent = 'Copy to Clipboard'; btn.classList.remove('done'); }, 2500);
+  }).catch(() => {
+    document.execCommand('copy');
+    document.getElementById('copyBtn').textContent = '✓ Copied!';
+  });
+}
+</script>
+</body>
+</html>

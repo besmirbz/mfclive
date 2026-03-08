@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<!-- MFCLIVE | © 2025 Besmir Pepa -->
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: transparent;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: 'Barlow Condensed', 'Arial Black', Arial, sans-serif;
+  }
+
+  /* ── Pitch background ── */
+  .pitch {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    opacity: 0.045;
+    pointer-events: none;
+  }
+  .pitch svg { width: 100%; height: 100%; }
+
+  /* ── Radial glow ── */
+  .glow-centre {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 1000px; height: 1000px;
+    background: radial-gradient(circle, rgba(61,130,246,0.11) 0%, transparent 70%);
+    animation: breathe 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 0.7; transform: translate(-50%,-50%) scale(1); }
+    50%       { opacity: 1;   transform: translate(-50%,-50%) scale(1.08); }
+  }
+
+  /* ── Scanlines ── */
+  .scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ── Accent bars ── */
+  .accent-top, .accent-bottom {
+    position: absolute;
+    left: 0; right: 0; height: 3px;
+    background: linear-gradient(to right, transparent 0%, #3D82F6 30%, #7DB8F7 50%, #3D82F6 70%, transparent 100%);
+    animation: shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .accent-top    { top: 0; }
+  .accent-bottom { bottom: 0; }
+  @keyframes shimmer { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+  /* ── Vertical rules ── */
+  .rule {
+    position: absolute;
+    top: 80px; bottom: 80px; width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(61,130,246,0.3) 30%, rgba(61,130,246,0.3) 70%, transparent);
+    pointer-events: none;
+  }
+  .rule-l { left: 80px; }
+  .rule-r { right: 80px; }
+
+  /* ── Corner brackets ── */
+  .corner { position: absolute; width: 120px; height: 120px; opacity: 0.06; pointer-events: none; }
+  .corner svg { width: 100%; height: 100%; }
+  .corner-tl { top: 40px;    left: 40px; }
+  .corner-tr { top: 40px;    right: 40px;  transform: scaleX(-1); }
+  .corner-bl { bottom: 40px; left: 40px;   transform: scaleY(-1); }
+  .corner-br { bottom: 40px; right: 40px;  transform: scale(-1,-1); }
+
+  /* ── Main layout ── */
+  .stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    animation: fadeIn 1.4s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  @keyframes fadeIn {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+
+  /* ── Brand pill ── */
+  .brand-pill {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(5,11,24,0.82);
+    border: 1px solid rgba(61,130,246,0.25);
+    border-radius: 100px;
+    padding: 16px 40px;
+    margin-bottom: 48px;
+  }
+  .brand-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #3D82F6;
+    animation: livePulse 1.6s ease-in-out infinite;
+  }
+  @keyframes livePulse {
+    0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(61,130,246,0.5); }
+    50%      { opacity:.4; box-shadow: 0 0 0 10px rgba(61,130,246,0); }
+  }
+  .brand-text {
+    font-size: 26px; font-weight: 700;
+    letter-spacing: .3em; text-transform: uppercase;
+    color: #7DB8F7;
+  }
+
+  /* ── Teams card ── */
+  .teams-card {
+    background: rgba(5,11,24,0.82);
+    border: 1px solid rgba(61,130,246,0.2);
+    border-radius: 20px;
+    padding: 52px 80px;
+    display: flex;
+    align-items: center;
+    gap: 70px;
+    margin-bottom: 28px;
+  }
+  .team-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    min-width: 300px;
+  }
+  .team-logo {
+    width: 180px; height: 180px;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 20px rgba(0,0,0,0.6));
+  }
+  .team-logo-placeholder {
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: rgba(61,130,246,0.1);
+    border: 2px solid rgba(61,130,246,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 72px;
+  }
+  .team-name {
+    font-size: 90px; font-weight: 900;
+    color: #fff; letter-spacing: .06em;
+    text-transform: uppercase;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.8);
+    text-align: center;
+  }
+
+  /* ── VS divider ── */
+  .vs-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 0 20px;
+  }
+  .vs-line {
+    width: 2px; height: 90px;
+    background: linear-gradient(to bottom, transparent, rgba(61,130,246,0.4));
+  }
+  .vs-line.bottom {
+    background: linear-gradient(to top, transparent, rgba(61,130,246,0.4));
+  }
+  .vs-text {
+    font-size: 56px; font-weight: 900;
+    color: #3D82F6; letter-spacing: .12em;
+  }
+
+  /* ── Meta info (league / arena) ── */
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 36px;
+  }
+  .meta-item {
+    background: rgba(5,11,24,0.82);
+    border: 1px solid rgba(61,130,246,0.15);
+    border-radius: 10px;
+    padding: 14px 32px;
+    font-family: 'Barlow', Arial, sans-serif;
+    font-size: 26px; font-weight: 600;
+    color: rgba(125,184,247,0.7);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .meta-item.hidden { display: none; }
+  .meta-sep {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(61,130,246,0.35);
+  }
+
+  /* ── Countdown card ── */
+  .countdown-card {
+    background: rgba(5,11,24,0.82);
+    border: 1px solid rgba(61,130,246,0.25);
+    border-radius: 20px;
+    padding: 40px 90px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .countdown-label {
+    font-size: 22px; font-weight: 700;
+    letter-spacing: .3em; text-transform: uppercase;
+    color: #3D82F6;
+  }
+  .countdown-digits {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cd-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .cd-num {
+    font-size: 160px; font-weight: 900;
+    color: #fff; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .02em;
+    text-shadow: 0 0 60px rgba(61,130,246,0.3);
+    min-width: 190px;
+    text-align: center;
+  }
+  .cd-unit {
+    font-size: 18px; font-weight: 700;
+    letter-spacing: .25em; text-transform: uppercase;
+    color: rgba(125,184,247,0.5);
+  }
+  .cd-sep {
+    font-size: 130px; font-weight: 900;
+    color: #3D82F6; line-height: 1;
+    margin-bottom: 30px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  /* when countdown hits 0 */
+  .countdown-card.starting .cd-num { color: #22c55e; text-shadow: 0 0 60px rgba(34,197,94,0.4); }
+  .countdown-card.starting .countdown-label { color: #22c55e; }
+  .countdown-card.starting { border-color: rgba(34,197,94,0.35); }
+
+  /* ── Kickoff time chip ── */
+  .kickoff-chip {
+    margin-top: 10px;
+    font-family: 'Barlow', Arial, sans-serif;
+    font-size: 24px; font-weight: 600;
+    color: rgba(125,184,247,0.45);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+
+  /* ── No kickoff notice ── */
+  .no-kickoff {
+    font-family: 'Barlow', Arial, sans-serif;
+    font-size: 28px;
+    color: rgba(239,68,68,0.7);
+    letter-spacing: .1em;
+    margin-top: 8px;
+  }
+
+  /* ── Credit ── */
+  .credit {
+    position: absolute;
+    bottom: 22px; right: 90px;
+    font-family: 'Barlow', Arial, sans-serif;
+    font-size: 12px;
+    color: rgba(125,184,247,0.18);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+  <!-- Background decoration -->
+  <div class="pitch">
+    <svg viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#7DB8F7" stroke-width="2">
+      <rect x="120" y="80" width="1680" height="920"/>
+      <line x1="960" y1="80" x2="960" y2="1000"/>
+      <circle cx="960" cy="540" r="180"/>
+      <circle cx="960" cy="540" r="5" fill="#7DB8F7"/>
+      <rect x="120" y="390" width="120" height="300"/>
+      <rect x="1680" y="390" width="120" height="300"/>
+      <rect x="120" y="290" width="280" height="500"/>
+      <rect x="1520" y="290" width="280" height="500"/>
+      <circle cx="400" cy="540" r="5" fill="#7DB8F7"/>
+      <circle cx="1520" cy="540" r="5" fill="#7DB8F7"/>
+    </svg>
+  </div>
+  <div class="glow-centre"></div>
+  <div class="scanlines"></div>
+  <div class="accent-top"></div>
+  <div class="accent-bottom"></div>
+  <div class="rule rule-l"></div>
+  <div class="rule rule-r"></div>
+
+  <div class="corner corner-tl"><svg viewBox="0 0 120 120" fill="none" stroke="#7DB8F7" stroke-width="3"><polyline points="40,10 10,10 10,40"/></svg></div>
+  <div class="corner corner-tr"><svg viewBox="0 0 120 120" fill="none" stroke="#7DB8F7" stroke-width="3"><polyline points="40,10 10,10 10,40"/></svg></div>
+  <div class="corner corner-bl"><svg viewBox="0 0 120 120" fill="none" stroke="#7DB8F7" stroke-width="3"><polyline points="40,10 10,10 10,40"/></svg></div>
+  <div class="corner corner-br"><svg viewBox="0 0 120 120" fill="none" stroke="#7DB8F7" stroke-width="3"><polyline points="40,10 10,10 10,40"/></svg></div>
+
+  <!-- Content -->
+  <div class="stage">
+
+    <div class="brand-pill">
+      <div class="brand-dot"></div>
+      <div class="brand-text">MFCLIVE · Starting Soon</div>
+    </div>
+
+    <!-- Teams -->
+    <div class="teams-card">
+      <div class="team-side">
+        <img id="homeLogoImg" class="team-logo" src="/logo/home" onerror="this.style.display='none';document.getElementById('homeLogoFallback').style.display='flex';" />
+        <div id="homeLogoFallback" class="team-logo-placeholder" style="display:none">⚽</div>
+        <div class="team-name" id="homeName">MFC</div>
+      </div>
+      <div class="vs-col">
+        <div class="vs-line"></div>
+        <div class="vs-text">VS</div>
+        <div class="vs-line bottom"></div>
+      </div>
+      <div class="team-side">
+        <img id="awayLogoImg" class="team-logo" src="/logo/away" onerror="this.style.display='none';document.getElementById('awayLogoFallback').style.display='flex';" />
+        <div id="awayLogoFallback" class="team-logo-placeholder" style="display:none">⚽</div>
+        <div class="team-name" id="awayName">AWAY</div>
+      </div>
+    </div>
+
+    <!-- League / Arena -->
+    <div class="meta-row">
+      <div class="meta-item" id="leagueMeta">Liga</div>
+      <div class="meta-sep" id="metaSep"></div>
+      <div class="meta-item" id="arenaMeta">Arena</div>
+    </div>
+
+    <!-- Countdown -->
+    <div class="countdown-card" id="countdownCard">
+      <div class="countdown-label" id="countdownLabel">Kickoff in</div>
+      <div class="countdown-digits">
+        <div class="cd-block">
+          <div class="cd-num" id="cdHours">00</div>
+          <div class="cd-unit">hours</div>
+        </div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block">
+          <div class="cd-num" id="cdMins">00</div>
+          <div class="cd-unit">minutes</div>
+        </div>
+        <div class="cd-sep">:</div>
+        <div class="cd-block">
+          <div class="cd-num" id="cdSecs">00</div>
+          <div class="cd-unit">seconds</div>
+        </div>
+      </div>
+      <div class="kickoff-chip" id="kickoffChip"></div>
+      <div class="no-kickoff" id="noKickoff" style="display:none">
+        Add ?kickoff=HH:MM to the URL to enable the countdown
+      </div>
+    </div>
+
+  </div>
+
+  <div class="credit">© 2025 Besmir Pepa</div>
+
+<script>
+// ── Parse kickoff time from URL query param ──────────────────────────────────
+// Usage: http://localhost:3000/startingsoon?kickoff=14:30
+function getKickoffDate() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('kickoff'); // e.g. "14:30"
+  if (!raw || !/^\d{1,2}:\d{2}$/.test(raw)) return null;
+  const [h, m] = raw.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  // If the time is already in the past today, assume tomorrow
+  if (d <= new Date()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+const kickoff = getKickoffDate();
+
+if (!kickoff) {
+  document.getElementById('noKickoff').style.display = 'block';
+  document.getElementById('kickoffChip').style.display = 'none';
+  // Hide digit blocks, show the hint instead
+  document.querySelector('.countdown-digits').style.display = 'none';
+} else {
+  const fmt2 = n => String(n).padStart(2, '0');
+  const kickoffStr = kickoff.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('kickoffChip').textContent = 'Kickoff at ' + kickoffStr;
+
+  function tick() {
+    const now = new Date();
+    const diff = kickoff - now;
+
+    if (diff <= 0) {
+      // Countdown reached zero
+      document.getElementById('cdHours').textContent = '00';
+      document.getElementById('cdMins').textContent  = '00';
+      document.getElementById('cdSecs').textContent  = '00';
+      document.getElementById('countdownLabel').textContent = "It's time!";
+      document.getElementById('countdownCard').classList.add('starting');
+      return;
+    }
+
+    const totalSecs = Math.floor(diff / 1000);
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+
+    document.getElementById('cdHours').textContent = fmt2(h);
+    document.getElementById('cdMins').textContent  = fmt2(m);
+    document.getElementById('cdSecs').textContent  = fmt2(s);
+
+    // Hide hours block if less than 1 hour remaining
+    const hoursBlock = document.getElementById('cdHours').closest('.cd-block');
+    const firstSep   = document.querySelector('.cd-sep');
+    if (h === 0) {
+      hoursBlock.style.display = 'none';
+      firstSep.style.display   = 'none';
+    } else {
+      hoursBlock.style.display = '';
+      firstSep.style.display   = '';
+    }
+  }
+
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ── SSE — pull team names, logos, league, arena from server state ────────────
+const es = new EventSource('/events');
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type !== 'state') return;
+
+  document.getElementById('homeName').textContent = d.homeTeam || 'MFC';
+  document.getElementById('awayName').textContent = d.awayTeam || 'AWAY';
+
+  // Logos
+  const hl = document.getElementById('homeLogoImg');
+  const al = document.getElementById('awayLogoImg');
+  if (d.homeLogo && hl.dataset.src !== d.homeLogo) {
+    hl.dataset.src = d.homeLogo;
+    hl.src = '/logo/home?t=' + Date.now();
+    hl.style.display = '';
+    document.getElementById('homeLogoFallback').style.display = 'none';
+  }
+  if (d.awayLogo && al.dataset.src !== d.awayLogo) {
+    al.dataset.src = d.awayLogo;
+    al.src = '/logo/away?t=' + Date.now();
+    al.style.display = '';
+    document.getElementById('awayLogoFallback').style.display = 'none';
+  }
+
+  // League + arena meta chips
+  const leagueEl = document.getElementById('leagueMeta');
+  const arenaEl  = document.getElementById('arenaMeta');
+  const sepEl    = document.getElementById('metaSep');
+
+  if (d.league) { leagueEl.textContent = d.league; leagueEl.classList.remove('hidden'); }
+  else          { leagueEl.classList.add('hidden'); }
+
+  if (d.arena)  { arenaEl.textContent = d.arena;   arenaEl.classList.remove('hidden'); }
+  else          { arenaEl.classList.add('hidden'); }
+
+  // Hide separator if either is missing
+  sepEl.style.display = (d.league && d.arena) ? '' : 'none';
+};
+</script>
+</body>
+</html>

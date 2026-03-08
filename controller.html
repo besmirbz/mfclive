@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MFCLIVE Controller</title>
+<style>
+:root {
+  --navy:#050B18; --card:#0d1829; --blue:#3D82F6; --lblue:#7DB8F7;
+  --green:#22c55e; --red:#ef4444; --orange:#f97316; --border:rgba(61,130,246,.2);
+  --yellow:#eab308;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--navy);color:#fff;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;padding:10px;min-height:100vh;}
+
+header{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:12px;}
+header img{width:32px;height:32px;object-fit:contain;}
+header h1{font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--lblue);}
+.conn{margin-left:auto;font-size:11px;color:var(--lblue);opacity:.6;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:10px;}
+.card-title{font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);margin-bottom:11px;}
+
+/* Timer */
+.timer-disp{text-align:center;font-size:58px;font-weight:900;font-variant-numeric:tabular-nums;color:#fff;line-height:1;margin-bottom:11px;}
+.timer-disp.running{color:var(--green);}
+.timer-disp.urgent{color:var(--red);}
+.timer-row{display:flex;gap:7px;}
+.timer-row-secondary{display:flex;gap:7px;margin-top:6px;}
+.btn-large{padding:18px 12px!important;font-size:17px!important;}
+.btn-small{padding:8px 12px!important;font-size:11px!important;flex:0 0 auto;}
+.btn-yellow{background:#b45309;color:#fef3c7;}
+
+/* Generic button */
+.btn{display:flex;align-items:center;justify-content:center;border:none;border-radius:8px;cursor:pointer;font-weight:800;font-size:13px;letter-spacing:.04em;padding:11px 12px;flex:1;transition:opacity .15s,transform .1s;text-transform:uppercase;font-family:inherit;}
+.btn:active{opacity:.72;transform:scale(.95);}
+.btn-green{background:var(--green);color:#fff;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-blue{background:var(--blue);color:#fff;}
+.btn-gray{background:#1e2d45;color:var(--lblue);}
+.btn-orange{background:var(--orange);color:#fff;}
+.btn-yellow{background:var(--yellow);color:#000;}
+
+/* Score / fouls two-col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.team-hdr{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+.team-hdr img{width:32px;height:32px;object-fit:contain;}
+.team-hdr span{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
+.big-num{font-size:38px;font-weight:900;text-align:center;line-height:1;margin:6px 0;}
+.col-btns{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+
+/* Foul dots */
+.foul-dots{display:flex;gap:4px;justify-content:center;margin:5px 0;}
+.fd{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);}
+.fd.filled{background:var(--orange);border-color:var(--orange);}
+.fd.danger{background:var(--red);border-color:var(--red);box-shadow:0 0 5px var(--red);}
+.foul-warn{font-size:10px;font-weight:800;letter-spacing:.1em;text-align:center;color:var(--red);text-transform:uppercase;min-height:14px;}
+
+/* Red cards */
+.rc-form{display:flex;gap:7px;margin-bottom:8px;}
+.rc-input{flex:1;background:#0a1525;border:1px solid var(--border);color:#fff;border-radius:6px;padding:9px 11px;font-size:14px;font-family:inherit;}
+.rc-input:focus{outline:none;border-color:var(--blue);}
+.rc-list{display:flex;flex-direction:column;gap:6px;}
+.rc-item{display:flex;align-items:center;gap:8px;background:#0a1525;border:1px solid rgba(239,68,68,.3);border-radius:7px;padding:8px 11px;}
+.rc-player-lbl{flex:1;font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;}
+.rc-team-lbl{font-size:10px;color:rgba(255,255,255,.45);letter-spacing:.08em;text-transform:uppercase;}
+.rc-countdown{font-size:18px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums;min-width:40px;text-align:right;}
+.rc-clear{background:#1e2d45;border:none;color:var(--lblue);border-radius:5px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer;}
+.rc-clear:active{opacity:.7;}
+
+/* Lower third */
+.lt-inputs{display:flex;flex-direction:column;gap:7px;margin-bottom:9px;}
+input[type=text]{background:#0a1525;border:1px solid var(--border);color:#fff;border-radius:6px;padding:9px 11px;font-size:14px;font-family:inherit;width:100%;}
+input[type=text]::placeholder{color:rgba(125,184,247,.35);}
+input[type=text]:focus{outline:none;border-color:var(--blue);}
+
+/* Lineup */
+.lineup-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px;}
+.lineup-col label{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);display:block;margin-bottom:5px;}
+textarea{background:#0a1525;border:1px solid var(--border);color:#fff;border-radius:6px;padding:8px 10px;font-size:12px;font-family:inherit;width:100%;resize:vertical;min-height:120px;line-height:1.7;}
+textarea:focus{outline:none;border-color:var(--blue);}
+
+/* Period */
+.period-row{display:flex;gap:7px;}
+
+/* Keyboard hint */
+.kbd-hint{font-size:10px;color:rgba(125,184,247,.4);margin-top:8px;letter-spacing:.05em;text-align:center;}
+
+/* Toast */
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--blue);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;transition:transform .3s;pointer-events:none;z-index:999;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<header>
+  <img id="homeLogoImg" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+  <h1>MFCLIVE</h1>
+  <p style="font-size:9px;color:rgba(125,184,247,.3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px;">© 2025 Besmir Pepa</p>
+  <span class="conn" id="conn">connecting…</span>
+</header>
+
+<!-- TIMER -->
+<div class="card">
+  <div class="card-title">⏱ Effective Time</div>
+  <div class="timer-disp" id="timerDisp">20:00</div>
+  <div class="timer-row">
+    <button class="btn btn-green btn-large" onclick="act('timer_start')">▶ Start</button>
+    <button class="btn btn-red btn-large"   onclick="act('timer_stop')">⏸ Stop</button>
+  </div>
+
+  <!-- Divider — clear visual gap before secondary controls -->
+  <div style="border-top:1px solid rgba(61,130,246,.12);margin:12px 0 10px;"></div>
+
+  <div class="timer-row-secondary">
+    <button class="btn btn-gray btn-small" id="resetBtn" onclick="confirmReset()">↺ Reset</button>
+    <button class="btn btn-gray btn-small" id="adjustToggle" onclick="toggleAdjust()">✎ Adjust</button>
+    <button class="btn btn-yellow btn-small" id="undoResetBtn" style="display:none" onclick="undoReset()">↩ Undo</button>
+  </div>
+
+  <!-- Adjust panel — MM:SS stepper, hidden by default -->
+  <div id="adjustPanel" style="display:none;margin-top:10px;background:#060e1c;border:1px solid rgba(61,130,246,.25);border-radius:8px;padding:14px;">
+    <div style="font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#3D82F6;margin-bottom:12px;text-align:center;">Set Exact Time</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px;">
+      <!-- Minutes -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
+        <button class="btn btn-gray btn-small" onclick="adjustStep('min',+1)" style="width:52px;font-size:18px;padding:6px 0!important;">▲</button>
+        <div id="adjMins" style="font-size:38px;font-weight:900;font-variant-numeric:tabular-nums;color:#fff;min-width:52px;text-align:center;line-height:1;">00</div>
+        <button class="btn btn-gray btn-small" onclick="adjustStep('min',-1)" style="width:52px;font-size:18px;padding:6px 0!important;">▼</button>
+        <div style="font-size:10px;color:rgba(125,184,247,.4);letter-spacing:.1em;text-transform:uppercase;">min</div>
+      </div>
+      <div style="font-size:36px;font-weight:900;color:#3D82F6;margin-bottom:20px;">:</div>
+      <!-- Seconds -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;">
+        <button class="btn btn-gray btn-small" onclick="adjustStep('sec',+1)" style="width:52px;font-size:18px;padding:6px 0!important;">▲</button>
+        <div id="adjSecs" style="font-size:38px;font-weight:900;font-variant-numeric:tabular-nums;color:#fff;min-width:52px;text-align:center;line-height:1;">00</div>
+        <button class="btn btn-gray btn-small" onclick="adjustStep('sec',-1)" style="width:52px;font-size:18px;padding:6px 0!important;">▼</button>
+        <div style="font-size:10px;color:rgba(125,184,247,.4);letter-spacing:.1em;text-transform:uppercase;">sec</div>
+      </div>
+    </div>
+    <button class="btn btn-blue" onclick="applyAdjust()" style="width:100%;font-size:14px;">✓ Apply</button>
+  </div>
+
+  <div class="kbd-hint">Keyboard: Space = start/stop</div>
+</div>
+
+<!-- PERIOD -->
+<div class="card">
+  <div class="card-title">🔢 Half</div>
+  <div class="period-row">
+    <button class="btn" id="p1btn" onclick="setPeriod(1)">1st Half</button>
+    <button class="btn" id="p2btn" onclick="setPeriod(2)">2nd Half</button>
+  </div>
+  <div style="margin-top:8px;">
+    <button class="btn btn-yellow" id="htBtn" onclick="setHalfTime()" style="width:100%">☕ Half Time — 15:00</button>
+  </div>
+  <div class="kbd-hint" id="htHint" style="min-height:14px;"></div>
+</div>
+
+<!-- TEAM NAMES -->
+<div class="card">
+  <div class="card-title">🏷 Team Short Names</div>
+  <div class="two-col" style="gap:8px;margin-bottom:0;">
+    <div>
+      <label style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);display:block;margin-bottom:5px;">Home</label>
+      <input type="text" id="homeShortName" placeholder="e.g. MFC" maxlength="6"
+        style="text-transform:uppercase;font-weight:900;font-size:18px;letter-spacing:.08em;"
+        oninput="pushShortName()" />
+    </div>
+    <div>
+      <label style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);display:block;margin-bottom:5px;">Away</label>
+      <input type="text" id="awayShortName" placeholder="e.g. ÖJE" maxlength="6"
+        style="text-transform:uppercase;font-weight:900;font-size:18px;letter-spacing:.08em;"
+        oninput="pushShortName()" />
+    </div>
+  </div>
+</div>
+
+<!-- SCORE + FOULS -->
+<div class="card">
+  <div class="card-title">⚽ Score &amp; Fouls</div>
+  <div class="two-col">
+    <!-- HOME -->
+    <div>
+      <div class="team-hdr">
+        <img id="homeLogoImg" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+        <span id="homeLbl">MFC</span>
+      </div>
+      <div class="big-num" id="homeScore">0</div>
+      <div class="col-btns">
+        <button class="btn btn-blue"  onclick="act('goal_home')">+ Goal</button>
+        <button class="btn btn-gray"  onclick="act('undo_home')">– Undo</button>
+      </div>
+      <div style="height:10px"></div>
+      <div class="foul-dots" id="homeFoulDots"></div>
+      <div class="foul-warn" id="homeFoulWarn"></div>
+      <div class="col-btns" style="margin-top:5px">
+        <button class="btn btn-orange" style="font-size:11px" onclick="act('foul_home')">+ Foul</button>
+        <button class="btn btn-gray"   style="font-size:11px" onclick="act('undo_foul_home')">– Undo</button>
+      </div>
+    </div>
+    <!-- AWAY -->
+    <div>
+      <div class="team-hdr">
+        <img id="awayLogoImg" src="/logo/away" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+        <span id="awayLbl">ÖIF</span>
+      </div>
+      <div class="big-num" id="awayScore">0</div>
+      <div class="col-btns">
+        <button class="btn btn-blue"  onclick="act('goal_away')">+ Goal</button>
+        <button class="btn btn-gray"  onclick="act('undo_away')">– Undo</button>
+      </div>
+      <div style="height:10px"></div>
+      <div class="foul-dots" id="awayFoulDots"></div>
+      <div class="foul-warn" id="awayFoulWarn"></div>
+      <div class="col-btns" style="margin-top:5px">
+        <button class="btn btn-orange" style="font-size:11px" onclick="act('foul_away')">+ Foul</button>
+        <button class="btn btn-gray"   style="font-size:11px" onclick="act('undo_foul_away')">– Undo</button>
+      </div>
+    </div>
+  </div>
+  <div class="kbd-hint">Keyboard: 1=home goal, 2=away goal, Q/W=undo goals, F/G=fouls</div>
+</div>
+
+<!-- RED CARDS -->
+<div class="card">
+  <div class="card-title">🟥 Red Cards (2-min penalty)</div>
+  <div class="rc-form">
+    <input class="rc-input" id="rcPlayer" type="text" placeholder="Player name / number" />
+    <button class="btn btn-red" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="addRC('home')">Home</button>
+    <button class="btn btn-gray" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="addRC('away')">Away</button>
+  </div>
+  <div class="rc-list" id="rcList"><div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px">No active penalties</div></div>
+</div>
+
+<!-- LOWER THIRD -->
+<div class="card">
+  <div class="card-title">📺 Lower Third</div>
+  <div class="lt-inputs">
+    <input type="text" id="ltLine1" placeholder="Player name / event" />
+    <input type="text" id="ltLine2" placeholder="Label (e.g. GOAL · 07:23)" />
+  </div>
+  <div style="display:flex;gap:7px;">
+    <div style="display:flex;align-items:center;gap:6px;flex:1;">
+      <button class="btn btn-orange" onclick="showLT()" style="flex:1;">▶ Show</button>
+      <select id="ltDuration" style="background:#1e2d45;color:#7DB8F7;border:1px solid rgba(61,130,246,.3);border-radius:7px;padding:9px 8px;font-size:12px;font-weight:800;font-family:inherit;cursor:pointer;">
+        <option value="6">6s</option>
+        <option value="8" selected>8s</option>
+        <option value="10">10s</option>
+        <option value="15">15s</option>
+        <option value="0">∞</option>
+      </select>
+    </div>
+    <button class="btn btn-gray" onclick="act('lower_hide')">✕ Hide</button>
+  </div>
+  <div class="kbd-hint">Keyboard: H = hide lower third</div>
+  <!-- Player quick-pick — populated from FOGIS roster via SSE -->
+  <div id="playerPicks" style="display:none;margin-top:12px;border-top:1px solid rgba(61,130,246,.15);padding-top:10px;">
+    <div style="font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">Quick-pick player</div>
+    <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px;letter-spacing:.06em;" id="homePickLbl">HOME</div>
+    <div id="homePlayerBtns" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;"></div>
+    <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px;letter-spacing:.06em;" id="awayPickLbl">AWAY</div>
+    <div id="awayPlayerBtns" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+  </div>
+</div>
+
+<!-- LINEUP -->
+<div class="card">
+  <div class="card-title">👥 Starting Lineup</div>
+  <div class="lineup-grid">
+    <div class="lineup-col">
+      <label id="homeLineupLbl">MFC</label>
+      <textarea id="homeLineup" placeholder="One player per line" oninput="this.dataset.manualEdit='1'">#1 Keeper
+#4 Player
+#7 Player
+#9 Player
+#11 Player</textarea>
+    </div>
+    <div class="lineup-col">
+      <label id="awayLineupLbl">Öjersjö IF</label>
+      <textarea id="awayLineup" placeholder="One player per line" oninput="this.dataset.manualEdit='1'">#1 Keeper
+#5 Player
+#8 Player
+#10 Player
+#14 Player</textarea>
+    </div>
+  </div>
+  <button class="btn btn-blue" onclick="saveLineup()" style="width:100%">Save & Push to Overlay</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let gameState = {};
+let localMs = 20*60*1000;
+let localRunning = false;
+let tickInterval;
+
+function fmt(ms) {
+  const s = Math.ceil(Math.max(0, ms) / 1000);
+  const m = Math.floor(s / 60);
+  return String(m).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+// Local ticks — game timer + red card countdowns
+let localRedCards = [];
+tickInterval = setInterval(() => {
+  if (localRunning && localMs > 0) {
+    localMs = Math.max(0, localMs - 100);
+    updateTimerDisplay();
+  }
+  // Tick red card countdowns locally every 100ms when timer running
+  if (localRunning && localRedCards.length) {
+    localRedCards = localRedCards.map(rc => ({
+      ...rc,
+      remainingMs: Math.max(0, rc.remainingMs - 100)
+    })).filter(rc => rc.remainingMs > 0);
+    renderRedCards(localRedCards, gameState.homeTeam||'Home', gameState.awayTeam||'Away');
+  }
+}, 100);
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timerDisp');
+  el.textContent = fmt(localMs);
+  el.className = 'timer-disp' + (localRunning ? ' running' : '') + (localMs <= 60000 && localMs > 0 ? ' urgent' : '');
+}
+
+function renderFouls(dotsId, warnId, count) {
+  const dots = document.getElementById(dotsId);
+  const warn = document.getElementById(warnId);
+  let html = '';
+  for (let i=0; i<5; i++) {
+    const f = i < count;
+    const d = f && count >= 5;
+    html += '<div class="fd' + (f ? (d?' danger':' filled'):'') + '"></div>';
+  }
+  dots.innerHTML = html;
+  if (count >= 6) warn.textContent = '⚠ FREE KICK FROM 10M — NO WALL';
+  else if (count === 5) warn.textContent = '⚠ 5 FOULS — NEXT = FREE KICK';
+  else warn.textContent = '';
+}
+
+function renderRedCards(cards, homeName, awayName) {
+  const el = document.getElementById('rcList');
+  if (!cards || !cards.length) {
+    el.innerHTML = '<div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px">No active penalties</div>';
+    return;
+  }
+  el.innerHTML = cards.map(rc => {
+    const tl = rc.team==='home' ? homeName : awayName;
+    return '<div class="rc-item">' +
+      '<div><div class="rc-player-lbl">🟥 ' + (rc.player||'—') + '</div>' +
+      '<div class="rc-team-lbl">' + tl + '</div></div>' +
+      '<div class="rc-countdown">' + fmt(rc.remainingMs) + '</div>' +
+      '<button class="rc-clear" onclick="act(\'red_card_remove\',{id:' + rc.id + '})">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+const es = new EventSource('/events?token=' + (window._MFCLIVE_TOKEN || ''));
+es.onopen  = () => document.getElementById('conn').textContent = 'connected ✓';
+es.onerror = () => document.getElementById('conn').textContent = 'reconnecting…';
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type !== 'state') return;
+  gameState = d;
+  localMs = d.timerMs;
+  localRunning = d.timerRunning;
+  updateTimerDisplay();
+  document.getElementById('homeScore').textContent = d.homeScore;
+  document.getElementById('awayScore').textContent = d.awayScore;
+  if (document.getElementById('homeLbl')) document.getElementById('homeLbl').textContent = d.homeTeam;
+  if (document.getElementById('awayLbl')) document.getElementById('awayLbl').textContent = d.awayTeam;
+  const p1 = document.getElementById('p1btn');
+  const p2 = document.getElementById('p2btn');
+  p1.className = 'btn ' + (d.period===1?'btn-blue':'btn-gray');
+  p2.className = 'btn ' + (d.period===2?'btn-blue':'btn-gray');
+  renderFouls('homeFoulDots','homeFoulWarn', d.homeFouls);
+  renderFouls('awayFoulDots','awayFoulWarn', d.awayFouls);
+  // Sync red cards from server (source of truth), keep local copy for smooth ticking
+  localRedCards = (d.redCards||[]).map(rc => ({...rc}));
+  renderRedCards(localRedCards, d.homeTeam, d.awayTeam);
+  // Update lineup textareas from server state if populated and not manually edited
+  if (d.homePlayers && d.homePlayers.length && !document.getElementById('homeLineup').dataset.manualEdit) {
+    document.getElementById('homeLineup').value = d.homePlayers.map(p=>'#'+p.num+' '+p.name+(p.cap?' (C)':'')).join('\n');
+    document.getElementById('homeLineupLbl').textContent = d.homeTeam;
+  }
+  if (d.awayPlayers && d.awayPlayers.length && !document.getElementById('awayLineup').dataset.manualEdit) {
+    document.getElementById('awayLineup').value = d.awayPlayers.map(p=>'#'+p.num+' '+p.name+(p.cap?' (C)':'')).join('\n');
+    document.getElementById('awayLineupLbl').textContent = d.awayTeam;
+  }
+  // Populate short name fields (only if user hasn't manually edited them)
+  const hnEl = document.getElementById('homeShortName');
+  const anEl = document.getElementById('awayShortName');
+  if (!hnEl.dataset.manual) hnEl.value = d.homeTeam || '';
+  if (!anEl.dataset.manual) anEl.value = d.awayTeam || '';
+
+  // Build player quick-pick buttons when roster is loaded
+  if (d.homePlayers && d.homePlayers.length) {
+    buildPlayerBtns('homePlayerBtns', d.homePlayers, 'home', d.homeTeam);
+    document.getElementById('homePickLbl').textContent = d.homeTeam;
+    document.getElementById('playerPicks').style.display = 'block';
+  }
+  if (d.awayPlayers && d.awayPlayers.length) {
+    buildPlayerBtns('awayPlayerBtns', d.awayPlayers, 'away', d.awayTeam);
+    document.getElementById('awayPickLbl').textContent = d.awayTeam;
+    document.getElementById('playerPicks').style.display = 'block';
+  }
+
+  // Refresh logos
+  const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
+  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();}
+  if(d.awayLogo&&al&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();}
+};
+
+// Reset confirmation + undo
+let preResetMs = null;
+let undoResetTimeout = null;
+
+function confirmReset() {
+  if (!confirm('Reset timer to 20:00?')) return;
+  preResetMs = localMs; // save current value for undo
+  act('timer_reset');
+  // Show undo button for 10 seconds
+  const undoBtn = document.getElementById('undoResetBtn');
+  undoBtn.style.display = '';
+  clearTimeout(undoResetTimeout);
+  undoResetTimeout = setTimeout(() => {
+    undoBtn.style.display = 'none';
+    preResetMs = null;
+  }, 10000);
+}
+
+function undoReset() {
+  if (preResetMs === null) return;
+  act('timer_set', { ms: preResetMs });
+  document.getElementById('undoResetBtn').style.display = 'none';
+  clearTimeout(undoResetTimeout);
+  preResetMs = null;
+}
+
+// Push manually edited short names to server immediately
+let shortNameDebounce = null;
+function pushShortName() {
+  clearTimeout(shortNameDebounce);
+  shortNameDebounce = setTimeout(() => {
+    const h = document.getElementById('homeShortName').value.trim().toUpperCase();
+    const a = document.getElementById('awayShortName').value.trim().toUpperCase();
+    if (h) act('set_team_names', { homeTeam: h, awayTeam: a || gameState.awayTeam });
+    if (a) act('set_team_names', { homeTeam: h || gameState.homeTeam, awayTeam: a });
+    document.getElementById('homeShortName').dataset.manual = '1';
+    document.getElementById('awayShortName').dataset.manual = '1';
+  }, 400);
+}
+
+async function act(action, payload={}) {
+  try {
+    await fetch('/action', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'X-MFCLIVE-Token': window._MFCLIVE_TOKEN || ''
+      },
+      body: JSON.stringify({action, payload})
+    });
+  } catch(e) { toast('Connection error'); }
+}
+
+function setPeriod(p) { act('set_period',{period:p}); toast('Half ' + p + ' — fouls reset'); }
+
+let adjustAutoClose = null;
+let adjMs = 0; // staging value shown in the panel
+
+function toggleAdjust() {
+  const panel = document.getElementById('adjustPanel');
+  const btn   = document.getElementById('adjustToggle');
+  const open  = panel.style.display === 'none';
+  if (open) {
+    // Sync stepper to current live timer value when opening
+    adjMs = localMs;
+    renderAdjust();
+  }
+  panel.style.display = open ? '' : 'none';
+  btn.classList.toggle('btn-blue', open);
+  btn.classList.toggle('btn-gray', !open);
+  clearTimeout(adjustAutoClose);
+  if (open) resetAdjustAutoClose();
+}
+
+function renderAdjust() {
+  const total = Math.round(adjMs / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  document.getElementById('adjMins').textContent = String(m).padStart(2, '0');
+  document.getElementById('adjSecs').textContent = String(s).padStart(2, '0');
+}
+
+function adjustStep(unit, delta) {
+  if (unit === 'min') adjMs = Math.min(20*60*1000, Math.max(0, adjMs + delta * 60000));
+  if (unit === 'sec') adjMs = Math.min(20*60*1000, Math.max(0, adjMs + delta * 1000));
+  renderAdjust();
+  resetAdjustAutoClose();
+}
+
+function applyAdjust() {
+  act('timer_set', { ms: adjMs });
+  const total = Math.round(adjMs / 1000);
+  toast('Timer set to ' + String(Math.floor(total/60)).padStart(2,'0') + ':' + String(total%60).padStart(2,'0'));
+  // Close panel
+  document.getElementById('adjustPanel').style.display = 'none';
+  document.getElementById('adjustToggle').classList.replace('btn-blue', 'btn-gray');
+  clearTimeout(adjustAutoClose);
+}
+
+function resetAdjustAutoClose() {
+  clearTimeout(adjustAutoClose);
+  adjustAutoClose = setTimeout(() => {
+    document.getElementById('adjustPanel').style.display = 'none';
+    document.getElementById('adjustToggle').classList.replace('btn-blue', 'btn-gray');
+  }, 15000);
+}
+
+function setHalfTime() {
+  act('timer_stop');
+  act('timer_set', { ms: 15 * 60 * 1000 });
+  act('set_halftime', { active: true });
+  document.getElementById('htBtn').style.background = 'var(--green)';
+  document.getElementById('htHint').textContent = '↺ Reset or 2nd Half to resume';
+  toast('Half time — 15:00 loaded, press Start when ready');
+  setTimeout(() => {
+    document.getElementById('htBtn').style.background = '';
+    document.getElementById('htHint').textContent = '';
+  }, 8000);
+}
+
+function addRC(team) {
+  const player = document.getElementById('rcPlayer').value.trim();
+  act('red_card_add', { team, player });
+  document.getElementById('rcPlayer').value = '';
+  toast('Red card added — 2 min penalty');
+}
+
+let ltHideTimer = null;
+function showLT() {
+  const l1 = document.getElementById('ltLine1').value.trim();
+  const l2 = document.getElementById('ltLine2').value.trim();
+  if (!l1) { toast('Enter a name first'); return; }
+  act('lower_show', {line1:l1, line2:l2});
+  toast('Lower third shown');
+  clearTimeout(ltHideTimer);
+  const dur = parseInt(document.getElementById('ltDuration').value);
+  if (dur > 0) ltHideTimer = setTimeout(() => act('lower_hide'), dur * 1000);
+}
+
+function saveLineup() {
+  const home = document.getElementById('homeLineup').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const away = document.getElementById('awayLineup').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  act('set_lineup', {home, away});
+  toast('Lineup pushed ✓');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+  if (e.code==='Space') { e.preventDefault(); act(localRunning?'timer_stop':'timer_start'); }
+  if (e.key==='1') act('goal_home');
+  if (e.key==='2') act('goal_away');
+  if (e.key==='q'||e.key==='Q') act('undo_home');
+  if (e.key==='w'||e.key==='W') act('undo_away');
+  if (e.key==='f'||e.key==='F') act('foul_home');
+  if (e.key==='g'||e.key==='G') act('foul_away');
+  if (e.key==='h'||e.key==='H') act('lower_hide');
+});
+</script>
+
+
+<script>
+
+
+function buildPlayerBtns(containerId, players, team, teamName) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = players.map(p => {
+    // Use data attributes to avoid quote-escaping bugs in onclick
+    const label = p.num + ' ' + p.name;
+    const firstName = p.name.split(' ')[0];
+    return '<button class="player-pick-btn" data-label="' + label + '" data-team="' + teamName + '" style="background:#1e2d45;border:none;color:#fff;border-radius:5px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">'
+      + p.num + ' ' + firstName + (p.cap ? ' ©' : '') + '</button>';
+  }).join('');
+  // Attach click handlers after rendering
+  el.querySelectorAll('.player-pick-btn').forEach(btn => {
+    btn.addEventListener('click', () => quickLT(btn.dataset.label, btn.dataset.team));
+  });
+}
+
+function quickLT(playerLabel, teamLabel) {
+  document.getElementById('ltLine1').value = playerLabel;
+  document.getElementById('ltLine2').value = 'GOAL · ' + document.getElementById('timerDisp').textContent;
+  toast('Lower third ready — tap Show');
+}
+</script>
+
+</body>
+</html>

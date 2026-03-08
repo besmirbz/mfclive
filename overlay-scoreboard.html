@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<!-- MFCLIVE | © 2025 Besmir Pepa -->
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:transparent; font-family:'Arial Black',Arial,sans-serif; width:1920px; height:1080px; overflow:hidden; }
+
+  #sb {
+    position: fixed;
+    top: 28px; left: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  #sb.ready { opacity: 1; }
+
+  /* Timer bar */
+  .timer-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 18px 6px 12px;
+    background: rgba(5,11,24,0.55);
+    border-radius: 6px;
+    border-left: 4px solid #3D82F6;
+    width: fit-content;
+  }
+  .period-lbl {
+    font-size: 13px; font-weight: 900;
+    letter-spacing: .18em; text-transform: uppercase;
+    color: #3D82F6;
+  }
+  .timer-val {
+    font-size: 38px; font-weight: 900;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .04em;
+    line-height: 1;
+    text-shadow: 0 0 14px rgba(61,130,246,.45);
+  }
+  .timer-val.urgent {
+    color: #ef4444;
+    text-shadow: 0 0 14px rgba(239,68,68,.6);
+    animation: urgentPulse 1s infinite;
+  }
+  @keyframes urgentPulse { 0%,100%{opacity:1} 50%{opacity:.65} }
+  .timer-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3D82F6;
+    opacity: 0; transition: opacity .3s; flex-shrink: 0;
+  }
+  .timer-dot.on { opacity:1; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.15} }
+
+  /* Team rows */
+  .team-row {
+    display: flex;
+    align-items: stretch;
+    height: 58px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  }
+
+  .cell-logo {
+    width: 58px;
+    background: rgba(5,11,24,0.55);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(61,130,246,.15);
+  }
+  .cell-logo img {
+    width: 40px; height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 4px rgba(0,0,0,.5));
+  }
+
+  .cell-name {
+    background: rgba(5,11,24,0.55);
+    padding: 0 18px;
+    min-width: 200px;
+    display: flex; align-items: center;
+    border-right: 1px solid rgba(61,130,246,.15);
+  }
+  .team-name {
+    font-size: 24px; font-weight: 900;
+    color: #fff; letter-spacing: .05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-shadow: 0 1px 6px rgba(0,0,0,.9);
+  }
+
+  .cell-score {
+    background: rgba(61,130,246,0.75);
+    width: 60px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .cell-score.scored { animation: scorePop .5s cubic-bezier(.22,1,.36,1); }
+  @keyframes scorePop {
+    0%   { transform:scale(1); background:rgba(255,255,255,0.85); }
+    40%  { transform:scale(1.18); }
+    100% { transform:scale(1); background:rgba(61,130,246,0.75); }
+  }
+  .score-num {
+    font-size: 42px; font-weight: 900;
+    color: #fff; line-height: 1;
+    text-shadow: 0 2px 8px rgba(0,0,0,.35);
+  }
+
+  .cell-fouls {
+    background: rgba(5,11,24,0.55);
+    padding: 0 14px;
+    display: flex; align-items: center; gap: 5px;
+    border-left: 1px solid rgba(61,130,246,.15);
+    min-width: 96px;
+  }
+  .foul-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2);
+    flex-shrink: 0;
+    transition: background .25s;
+  }
+  .foul-dot.filled { background:#f97316; border-color:#f97316; }
+  .foul-dot.danger { background:#ef4444; border-color:#ef4444; box-shadow:0 0 6px #ef4444; }
+  .foul-extra {
+    font-size:10px; font-weight:900;
+    color:#ef4444; letter-spacing:.07em;
+    text-transform:uppercase; white-space:nowrap; margin-left:2px;
+  }
+
+  /* Red card — zero width until active, NO border until active */
+  .cell-redcard {
+    background: rgba(5,11,24,0.55);
+    display: flex; align-items: center; gap: 8px;
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width .35s ease, padding .35s ease, border-left-width .35s ease;
+    padding: 0;
+    border-left: 0px solid #ef4444;
+  }
+  .cell-redcard.active {
+    max-width: 130px;
+    padding: 0 14px;
+    border-left-width: 3px;
+  }
+  .rc-icon { font-size:18px; flex-shrink:0; }
+  .rc-timer-disp {
+    font-size:22px; font-weight:900;
+    color:#ef4444; font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+    text-shadow:0 0 8px rgba(239,68,68,.4);
+  }
+</style>
+</head>
+<body>
+<div id="sb">
+  <div class="timer-bar">
+    <div class="timer-dot" id="timerDot"></div>
+    <span class="period-lbl" id="periodLbl">1ST HALF</span>
+    <span class="timer-val" id="timerVal">20:00</span>
+  </div>
+  <div class="team-row">
+    <div class="cell-logo"><img id="homeLogoImg" src="/logo/home" onerror="this.style.opacity=0.3" /></div>
+    <div class="cell-name"><span class="team-name" id="homeName">MFC</span></div>
+    <div class="cell-score" id="homeScoreCell"><span class="score-num" id="homeScore">0</span></div>
+    <div class="cell-fouls" id="homeFouls"></div>
+    <div class="cell-redcard" id="homeRC">
+      <span class="rc-icon">🟥</span>
+      <span class="rc-timer-disp" id="homeRCTimer"></span>
+    </div>
+  </div>
+  <div class="team-row">
+    <div class="cell-logo"><img id="awayLogoImg" src="/logo/away" onerror="this.style.opacity=0.3" /></div>
+    <div class="cell-name"><span class="team-name" id="awayName">AWAY</span></div>
+    <div class="cell-score" id="awayScoreCell"><span class="score-num" id="awayScore">0</span></div>
+    <div class="cell-fouls" id="awayFouls"></div>
+    <div class="cell-redcard" id="awayRC">
+      <span class="rc-icon">🟥</span>
+      <span class="rc-timer-disp" id="awayRCTimer"></span>
+    </div>
+  </div>
+</div>
+<script>
+function fmt(ms) {
+  const s = Math.ceil(Math.max(0,ms)/1000);
+  return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+}
+function renderFouls(id, count) {
+  const el = document.getElementById(id);
+  let h = '';
+  for (let i=0;i<5;i++) {
+    const f=i<count, d=f&&count>=5;
+    h+=`<div class="foul-dot${f?(d?' danger':' filled'):''}"></div>`;
+  }
+  if (count>=6) h+=`<span class="foul-extra">+${count-5} FK</span>`;
+  else if (count===5) h+=`<span class="foul-extra">MAX</span>`;
+  el.innerHTML=h;
+}
+function renderRedCard(cellId, timerId, cards) {
+  const cell=document.getElementById(cellId), timerEl=document.getElementById(timerId);
+  if (cards&&cards.length>0) { timerEl.textContent=fmt(cards[0].remainingMs); cell.classList.add('active'); }
+  else { cell.classList.remove('active'); timerEl.textContent=''; }
+}
+let prevHome=0, prevAway=0;
+const es=new EventSource('/events');
+es.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  if(d.type!=='state') return;
+  document.getElementById('homeName').textContent=d.homeTeam;
+  document.getElementById('awayName').textContent=d.awayTeam;
+  if(d.homeScore!==prevHome){
+    const c=document.getElementById('homeScoreCell');
+    c.classList.remove('scored'); void c.offsetWidth; c.classList.add('scored');
+    prevHome=d.homeScore;
+  }
+  if(d.awayScore!==prevAway){
+    const c=document.getElementById('awayScoreCell');
+    c.classList.remove('scored'); void c.offsetWidth; c.classList.add('scored');
+    prevAway=d.awayScore;
+  }
+  document.getElementById('homeScore').textContent=d.homeScore;
+  document.getElementById('awayScore').textContent=d.awayScore;
+  document.getElementById('periodLbl').textContent=d.halfTime?'HALF TIME':d.period===1?'1ST HALF':'2ND HALF';
+  const tv=document.getElementById('timerVal');
+  tv.textContent=fmt(d.timerMs);
+  tv.classList.toggle('urgent',d.timerMs<=60000&&d.timerMs>0);
+  document.getElementById('timerDot').classList.toggle('on',d.timerRunning);
+  renderFouls('homeFouls',d.homeFouls);
+  renderFouls('awayFouls',d.awayFouls);
+  renderRedCard('homeRC','homeRCTimer',(d.redCards||[]).filter(rc=>rc.team==='home'));
+  renderRedCard('awayRC','awayRCTimer',(d.redCards||[]).filter(rc=>rc.team==='away'));
+  const hl=document.getElementById('homeLogoImg'), al=document.getElementById('awayLogoImg');
+  if(d.homeLogo&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();hl.style.opacity=1;}
+  if(d.awayLogo&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();al.style.opacity=1;}
+  document.getElementById('sb').classList.add('ready');
+};
+</script>
+</body>
+</html>
