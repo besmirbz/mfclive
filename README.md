@@ -34,13 +34,13 @@ All files must be kept in the **same folder** on the stream PC.
 
 ### 1. Set up the FOGIS bookmarklet
 
-This is a one-time step that lets you load team rosters automatically from minfotboll.se.
+> **Swedish clubs only.** FOGIS (minfotboll.se) is the Swedish Football Federation's game management system. This step lets you load team rosters, logos, and venue info automatically with one click. If your club doesn't use FOGIS, skip this step — you can enter team names and lineups manually in the controller.
 
 1. Open `bookmarklet.html` in Chrome on the stream PC
 2. Press **Ctrl+Shift+B** to show the bookmarks bar
 3. Click **Copy to Clipboard**
 4. Right-click the bookmarks bar → **Add page** (or "Add bookmark")
-5. Set the **Name** to `⚽ MFC Load Roster`
+5. Set the **Name** to `⚽ Load Roster`
 6. Paste the copied code into the **URL** field
 7. Click **Save**
 
@@ -68,11 +68,19 @@ body { background-color: rgba(0, 0, 0, 0) !important; }
 
 ### 3. Streamlabs output settings
 
-For best quality and stability on a laptop without a dedicated GPU:
+Choose the hardware encoder that matches your GPU for best performance:
+
+| GPU | Encoder to select |
+|---|---|
+| AMD (Radeon) | AMD HW H.264 (AMF) |
+| Nvidia | NVENC H.264 |
+| Intel (integrated) | QuickSync H.264 |
+| No dedicated GPU | x264 — preset `veryfast` |
+
+Recommended settings regardless of encoder:
 
 | Setting | Value |
 |---|---|
-| Encoder | AMD HW H.264 (AMF) |
 | Output resolution | 1920×1080 |
 | FPS | 30 |
 | Bitrate | 4000–5000 kbps (test on the day — see below) |
@@ -164,7 +172,7 @@ Both devices must be on the same Wi-Fi network. The Streamlabs Browser Sources a
 4. A small banner confirms the fetch. A new tab opens briefly showing team names and player counts, then closes automatically
 5. The controller, scoreboard, lineup, and starting soon overlay all update instantly with real team names, logos, and squad
 
-> **MFC is always shown on the left (home side)** regardless of how FOGIS lists the teams.
+> **Your club is always shown on the left (home side)** regardless of how FOGIS lists the teams. The server identifies your club by matching the team name against a keyword list in `server.js` — look for `MFC_KEYWORDS` near the top of the `processRosterData` function and update it to match your club's name.
 
 ### Step 7 — Check team short names
 
@@ -308,7 +316,7 @@ body { background-color: rgba(0, 0, 0, 0) !important; }
 The overlays connect via Server-Sent Events. Refresh the Browser Source in Streamlabs (right-click → Refresh). Make sure the server is still running.
 
 **Dropped frames / stuttering stream**
-Check Windows power plan is set to Best Performance and the charger is plugged in. If on AMF encoder and still dropping frames, switch to x264 at `veryfast` preset in Streamlabs Output settings.
+Check Windows power plan is set to Best Performance and the charger is plugged in. If still dropping frames, switch to x264 at `veryfast` preset in Streamlabs Output settings — it's slower to encode but uses the CPU instead of the GPU and is more stable on low-end hardware.
 
 **Red card shows on scoreboard with no active penalty**
 Restart the server — this was a known display bug that has since been fixed.
