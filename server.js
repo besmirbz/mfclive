@@ -124,6 +124,10 @@ function getPublicState() {
     league:       state.league,
     homePlayers:  state._homePlayers || [],
     awayPlayers:  state._awayPlayers || [],
+    homeStarters: state._homeStarters || [],
+    homeSubs:     state._homeSubs     || [],
+    awayStarters: state._awayStarters || [],
+    awaySubs:     state._awaySubs     || [],
   };
 }
 
@@ -368,19 +372,41 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       state.arena    = hdr.ArenaName || '';
       state.league   = hdr.LeagueDisplayName || '';
 
-      function parsePlayers(roster) {
-        if (!roster?.Players) return [];
-        return roster.Players
-          .sort((a, b) => a.ShirtNumber - b.ShirtNumber)
-          .map(p => `#${p.ShirtNumber} ${p.FullName}${p.IsTeamCaptain ? ' (C)' : ''}`);
+      // Split a roster into { starters, subs } using the separate FOGIS arrays.
+      // roster.Players = starting 5, roster.Substitutes = bench players.
+      // If Substitutes is absent or empty (flat upload), subs is [] — graceful fallback.
+      function splitRoster(roster) {
+        if (!roster) return { starters: [], subs: [] };
+        const starters = (roster.Players || [])
+          .filter(p => !p.IsPlayingTeamStaff && !p.IsContactPerson)
+          .sort((a, b) => a.ShirtNumber - b.ShirtNumber);
+        const subs = (roster.Substitutes || [])
+          .filter(p => !p.IsPlayingTeamStaff && !p.IsContactPerson)
+          .sort((a, b) => a.ShirtNumber - b.ShirtNumber);
+        return { starters, subs };
       }
-      state.lineup.home = parsePlayers(ourHomeRoster);
-      state.lineup.away = parsePlayers(ourAwayRoster);
-      state._homePlayers = (ourHomeRoster?.Players || [])
-        .sort((a,b) => a.ShirtNumber - b.ShirtNumber)
+
+      function formatPlayer(p) {
+        return `#${p.ShirtNumber} ${p.FullName}${p.IsTeamCaptain ? ' (C)' : ''}`;
+      }
+
+      const homeSplit = splitRoster(ourHomeRoster);
+      const awaySplit = splitRoster(ourAwayRoster);
+
+      // lineup.home / lineup.away keep the flat string format for the controller textarea
+      state.lineup.home = [...homeSplit.starters, ...homeSplit.subs].map(formatPlayer);
+      state.lineup.away = [...awaySplit.starters, ...awaySplit.subs].map(formatPlayer);
+
+      // Expose starters and subs separately for the lineup overlay
+      state._homeStarters = homeSplit.starters.map(formatPlayer);
+      state._homeSubs     = homeSplit.subs.map(formatPlayer);
+      state._awayStarters = awaySplit.starters.map(formatPlayer);
+      state._awaySubs     = awaySplit.subs.map(formatPlayer);
+
+      // Quick-pick buttons in the controller — starters only
+      state._homePlayers = homeSplit.starters
         .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
-      state._awayPlayers = (ourAwayRoster?.Players || [])
-        .sort((a,b) => a.ShirtNumber - b.ShirtNumber)
+      state._awayPlayers = awaySplit.starters
         .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
       broadcast(getPublicState());
       return {
