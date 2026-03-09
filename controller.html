@@ -265,7 +265,7 @@ textarea:focus{outline:none;border-color:var(--blue);}
 
 <!-- LINEUP -->
 <div class="card">
-  <div class="card-title">👥 Starting Lineup</div>
+  <div class="card-title">👥 Players</div>
   <div class="lineup-grid">
     <div class="lineup-col">
       <label id="homeLineupLbl">MFC</label>
@@ -380,12 +380,12 @@ es.onmessage = e => {
   localRedCards = (d.redCards||[]).map(rc => ({...rc}));
   renderRedCards(localRedCards, d.homeTeam, d.awayTeam);
   // Update lineup textareas from server state if populated and not manually edited
-  if (d.homePlayers && d.homePlayers.length && !document.getElementById('homeLineup').dataset.manualEdit) {
-    document.getElementById('homeLineup').value = d.homePlayers.map(p=>'#'+p.num+' '+p.name+(p.cap?' (C)':'')).join('\n');
+  if (d.lineup.home && d.lineup.home.length && !document.getElementById('homeLineup').dataset.manualEdit) {
+    document.getElementById('homeLineup').value = d.lineup.home.join('\n');
     document.getElementById('homeLineupLbl').textContent = d.homeTeam;
   }
-  if (d.awayPlayers && d.awayPlayers.length && !document.getElementById('awayLineup').dataset.manualEdit) {
-    document.getElementById('awayLineup').value = d.awayPlayers.map(p=>'#'+p.num+' '+p.name+(p.cap?' (C)':'')).join('\n');
+  if (d.lineup.away && d.lineup.away.length && !document.getElementById('awayLineup').dataset.manualEdit) {
+    document.getElementById('awayLineup').value = d.lineup.away.join('\n');
     document.getElementById('awayLineupLbl').textContent = d.awayTeam;
   }
   // Populate short name fields (only if user hasn't manually edited them)

@@ -351,19 +351,18 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       const ourHomeLogo    = mfcIsHome ? hdr.HomeTeamClubLogoURL : hdr.AwayTeamClubLogoURL;
       const ourAwayLogo    = mfcIsHome ? hdr.AwayTeamClubLogoURL : hdr.HomeTeamClubLogoURL;
 
-      // Auto-abbreviate to 3 letters for scoreboard display
-      // e.g. "Malmö Futsal Club" → "MFC", "Öjersjö IF" → "ÖJE"
+      // Abbreviate team name for scoreboard display.
+      // Known sport suffixes (IF, FC, BK etc.) are kept whole.
+      // All other words contribute their first letter only.
+      // e.g. "Malmö Futsal Club" → "MFC", "Öjersjö IF" → "ÖIF", "Malmö FC" → "MFC"
       function abbreviateTeam(name) {
         if (!name) return name;
-        const SKIP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','dam','herr','club','united','city']);
-        const words = name.trim().split(/\s+/);
-        const meaningful = words.filter(w => !SKIP.has(w.toLowerCase()));
-        if (meaningful.length >= 2) {
-          // Multi-word meaningful name → take first letter of each meaningful word
-          return meaningful.map(w => w[0].toUpperCase()).join('').slice(0,4);
-        }
-        // Single meaningful word → take first 3 chars
-        return (meaningful[0] || words[0]).slice(0,3).toUpperCase();
+        const KEEP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','ifk','iff','fik']);
+        return name.trim().split(/\s+/)
+          .map(w => (KEEP.has(w.toLowerCase()) || (w === w.toUpperCase() && w.length <= 4))
+            ? w.toUpperCase() : w[0].toUpperCase())
+          .join('')
+          .slice(0, 6);
       }
       state.homeTeam = abbreviateTeam(ourHomeTeam) || state.homeTeam;
       state.awayTeam = abbreviateTeam(ourAwayTeam) || state.awayTeam;
@@ -403,10 +402,10 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       state._awayStarters = awaySplit.starters.map(formatPlayer);
       state._awaySubs     = awaySplit.subs.map(formatPlayer);
 
-      // Quick-pick buttons in the controller — starters only
-      state._homePlayers = homeSplit.starters
+      // Quick-pick buttons in the controller — full squad (starters then subs)
+      state._homePlayers = [...homeSplit.starters, ...homeSplit.subs]
         .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
-      state._awayPlayers = awaySplit.starters
+      state._awayPlayers = [...awaySplit.starters, ...awaySplit.subs]
         .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
       broadcast(getPublicState());
       return {

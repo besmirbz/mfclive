@@ -176,7 +176,7 @@ Both devices must be on the same Wi-Fi network. The Streamlabs Browser Sources a
 
 ### Step 7 — Check team short names
 
-After loading, check the **Team Short Names** card at the top of the controller. The system auto-abbreviates team names (e.g. "Malmö Futsal Club" → "MFC", "Öjersjö IF" → "ÖJE"). If the result looks wrong for the opponent, just type the correct abbreviation — the scoreboard updates live.
+After loading, check the **Team Short Names** card at the top of the controller. The system auto-abbreviates team names by taking the first letter of each word and keeping known sport suffixes whole (e.g. "Malmö Futsal Club" → "MFC", "Öjersjö IF" → "ÖIF", "Hammarby IF" → "HIF"). If the result looks wrong for the opponent, just type the correct abbreviation — the scoreboard updates live.
 
 ### Step 8 — Run a test stream
 
@@ -256,13 +256,15 @@ Used for on-screen announcements (goals, substitutions, etc.).
 
 **∞ (infinity)** keeps it on screen permanently until you tap Hide — useful for pre-match or half-time announcements.
 
-**Quick-pick player buttons** appear below the duration selector after the roster is loaded. Tap any player to instantly fill Line 1 with their name and Line 2 with `GOAL · [current time]`.
+**Quick-pick player buttons** appear below the duration selector after the roster is loaded. Tap any player to instantly fill Line 1 with their name and Line 2 with `GOAL · [current time]`. The full squad is shown — starters and substitutes.
 
-### Starting Lineup
+### Players
 
-The lineup overlay shows both squads side by side in a mirrored layout (home right-aligned, away left-aligned, logos in the centre). It is populated automatically when the roster loads from FOGIS.
+The **Players** card shows the full squad for each team — starters and substitutes in separate sections when the away team has uploaded their roster with substitutes flagged in FOGIS. If a team uploaded a flat list (no substitute distinction), all players are shown together.
 
-You can also edit the lineups manually in the text areas — one player per line. Tap **Push to Overlay** to send them to the stream. Manual edits will not be overwritten by SSE updates during the session.
+The text areas are populated automatically when the roster loads. You can also edit them manually — one player per line. Tap **Save & Push to Overlay** to send them to the lineup overlay. Manual edits will not be overwritten by SSE updates during the session.
+
+**Quick-pick player buttons** (in the Lower Third card) show the full squad after the roster loads — starters and subs — so you can tap any player for a goal announcement regardless of whether they started.
 
 ---
 
@@ -278,6 +280,10 @@ You can also edit the lineups manually in the text areas — one player per line
 
 - **Timer bar** — period label, pulsing dot (running indicator), countdown
 - **Team rows** — logo, abbreviated name, score (flashes on goal), foul dots, red card timer (hidden when no active penalty)
+
+### Team Lineup
+
+Full-screen overlay showing both squads side by side in a mirrored layout (home right-aligned, away left-aligned, logos in the centre). When a team has uploaded substitutes in FOGIS, the overlay automatically shows **Starting** and **Substitutes** section labels. Teams with a flat roster upload show all players without section labels. Populated from FOGIS automatically after the bookmarklet runs.
 
 ### Starting Soon
 
