@@ -5,7 +5,8 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:transparent; font-family:'Arial Black',Arial,sans-serif; width:1920px; height:1080px; overflow:hidden; }
+  body { background:transparent; font-family:'Arial Black',Arial,sans-serif; width:1920px; height:1080px; overflow:hidden; transition: opacity 0.45s ease; }
+  body.ov-hidden { opacity: 0; pointer-events: none; }
 
   #lt {
     position: absolute;
@@ -272,6 +273,8 @@ es.onmessage = e => {
   if (d.type !== 'state') return;
   const lt   = document.getElementById('lt');
   const foot = document.getElementById('ltFoot');
+
+  document.body.classList.toggle('ov-hidden', d.overlayVisible?.lowerthird === false);
 
   if (d.lowerThird.visible) {
     document.getElementById('ltLine1').textContent = d.lowerThird.line1 || '';

@@ -23,7 +23,7 @@ All files must be kept in the **same folder** on the stream PC.
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) installed on the stream PC (v18 or newer recommended)
+- [Node.js](https://nodejs.org/) installed on the stream PC (v14 or newer; v18+ recommended)
 - [Streamlabs](https://streamlabs.com/) for streaming
 - Google Chrome on the stream PC (for the bookmarklet)
 - A phone or tablet on the same Wi-Fi network as the stream PC
@@ -98,8 +98,10 @@ For every Browser Source that is **not visible** in the current scene, right-cli
 Open a terminal (Command Prompt or PowerShell) in the folder containing the files and run:
 
 ```
-node server.js
+npm start
 ```
+
+(You can also run `node server.js` directly if you prefer.)
 
 You should see:
 
@@ -247,7 +249,7 @@ Fouls are tracked per half (reset when you change period). The scoreboard shows 
 
 ### Lower Third
 
-Used for on-screen announcements (goals, substitutions, etc.).
+Used for on-screen announcements (goals, substitutions, etc.). The graphic adapts to the event type: goals show a gold bar with the team logo and trigger a particle burst + shine sweep; red cards use red accents with a strobe flash; substitutions use blue accents. Each event type has its own full-screen flash effect.
 
 1. Fill in **Line 1** (player name or event) and **Line 2** (label, e.g. "GOAL")
 2. Choose a duration from the dropdown: **6s / 8s / 10s / 15s / ∞**
@@ -262,7 +264,9 @@ Used for on-screen announcements (goals, substitutions, etc.).
 
 The **Players** card shows the full squad for each team — starters and substitutes in separate sections when the away team has uploaded their roster with substitutes flagged in FOGIS. If a team uploaded a flat list (no substitute distinction), all players are shown together.
 
-The text areas are populated automatically when the roster loads. You can also edit them manually — one player per line. Tap **Save & Push to Overlay** to send them to the lineup overlay. Manual edits will not be overwritten by SSE updates during the session.
+The text areas are populated automatically when the roster loads. You can also edit them manually — one player per line. Tap **Save & Push to Overlay** to send them to the lineup overlay.
+
+Once you manually edit a textarea the field is locked and will not be overwritten by live state updates. To re-sync with the latest roster, tap the **↺ Re-sync** button next to the section heading, or simply run the bookmarklet again — a fresh FOGIS import always clears the lock automatically.
 
 **Quick-pick player buttons** (in the Lower Third card) show the full squad after the roster loads — starters and subs — so you can tap any player for a goal announcement regardless of whether they started.
 

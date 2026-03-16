@@ -14,9 +14,12 @@
     flex-direction: column;
     gap: 4px;
     opacity: 0;
-    transition: opacity 0.5s;
+    transform: translateY(0);
+    transition: opacity 0.55s ease, transform 0.55s ease;
   }
   #sb.ready { opacity: 1; }
+  /* Overlay hidden — slides up and fades out */
+  #sb.ov-hidden { opacity: 0 !important; transform: translateY(-18px); pointer-events: none; }
 
   /* Timer bar */
   .timer-bar {
@@ -238,7 +241,10 @@ es.onmessage=e=>{
   const hl=document.getElementById('homeLogoImg'), al=document.getElementById('awayLogoImg');
   if(d.homeLogo&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();hl.style.opacity=1;}
   if(d.awayLogo&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();al.style.opacity=1;}
-  document.getElementById('sb').classList.add('ready');
+  const sb=document.getElementById('sb');
+  const ovVisible = d.overlayVisible?.scoreboard !== false;
+  if (ovVisible) { sb.classList.add('ready'); sb.classList.remove('ov-hidden'); }
+  else           { sb.classList.add('ov-hidden'); }
 };
 </script>
 </body>

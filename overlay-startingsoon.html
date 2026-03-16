@@ -14,7 +14,10 @@
     height: 1080px;
     overflow: hidden;
     font-family: 'Barlow Condensed', 'Arial Black', Arial, sans-serif;
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
+  /* Overlay hidden — zooms in slightly and fades out (cinematic) */
+  body.ov-hidden { opacity: 0; transform: scale(1.03); pointer-events: none; }
 
   /* ── Pitch background ── */
   .pitch {
@@ -491,6 +494,8 @@ es.onmessage = e => {
 
   // Hide separator if either is missing
   sepEl.style.display = (d.league && d.arena) ? '' : 'none';
+
+  document.body.classList.toggle('ov-hidden', d.overlayVisible?.startingsoon === false);
 };
 </script>
 </body>

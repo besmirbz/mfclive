@@ -15,9 +15,12 @@
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.6s;
+    transform: scale(1);
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
   body.ready { opacity: 1; }
+  /* Overlay hidden — shrinks slightly and fades out */
+  body.ov-hidden { opacity: 0 !important; transform: scale(0.97); pointer-events: none; }
 
   /* Full-screen semi-transparent backdrop — no blur, just rgba */
   .backdrop {
@@ -281,7 +284,9 @@ es.onmessage = e => {
   if (d.homeLogo && hl.dataset.src !== d.homeLogo) { hl.dataset.src=d.homeLogo; hl.src='/logo/home?t='+Date.now(); }
   if (d.awayLogo && al.dataset.src !== d.awayLogo) { al.dataset.src=d.awayLogo; al.src='/logo/away?t='+Date.now(); }
 
-  document.body.classList.add('ready');
+  const ovVisible = d.overlayVisible?.lineup !== false;
+  if (ovVisible) { document.body.classList.add('ready'); document.body.classList.remove('ov-hidden'); }
+  else           { document.body.classList.add('ov-hidden'); }
 };
 </script>
 </body>

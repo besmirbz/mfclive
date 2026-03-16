@@ -85,7 +85,15 @@ const state = {
   lineup: {
     home: ['#1 Keeper','#4 Player','#7 Player','#9 Player','#11 Player'],
     away: ['#1 Keeper','#5 Player','#8 Player','#10 Player','#14 Player'],
-  }
+  },
+  // Overlay visibility — controls show/hide of each browser source
+  overlayVisible: {
+    scoreboard:   true,
+    lineup:       false,
+    lowerthird:   true,
+    startingsoon: false,
+    brb:          false,
+  },
 };
 
 // ── SSE clients ────────────────────────────────────────────────────────────────
@@ -125,9 +133,10 @@ function getPublicState() {
     homeFouls:    state.homeFouls,
     awayFouls:    state.awayFouls,
     redCards,
-    lowerThird:   state.lowerThird,
-    lineup:       state.lineup,
-    arena:        state.arena,
+    lowerThird:      state.lowerThird,
+    lineup:          state.lineup,
+    overlayVisible:  state.overlayVisible,
+    arena:           state.arena,
     league:       state.league,
     homePlayers:  state._homePlayers || [],
     awayPlayers:  state._awayPlayers || [],
@@ -311,6 +320,14 @@ function handleAction(action, payload) {
       if (payload.homeTeam) state.homeTeam = payload.homeTeam.slice(0,6).toUpperCase();
       if (payload.awayTeam) state.awayTeam = payload.awayTeam.slice(0,6).toUpperCase();
       break;
+
+    case 'overlay_set': {
+      const VALID_OVERLAYS = ['scoreboard','lineup','lowerthird','startingsoon','brb'];
+      if (VALID_OVERLAYS.includes(payload.name) && typeof payload.visible === 'boolean') {
+        state.overlayVisible[payload.name] = payload.visible;
+      }
+      break;
+    }
     case 'timer_set':
       state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;

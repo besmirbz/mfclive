@@ -86,6 +86,21 @@ textarea:focus{outline:none;border-color:var(--blue);}
 /* Keyboard hint */
 .kbd-hint{font-size:10px;color:rgba(125,184,247,.4);margin-top:8px;letter-spacing:.05em;text-align:center;}
 
+/* Overlay visibility controls */
+@keyframes ovPulse{0%,100%{opacity:1}50%{opacity:.25}}
+.ov-row{display:flex;align-items:center;padding:11px 13px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);margin-bottom:6px;transition:background .2s,border-color .2s;user-select:none;-webkit-tap-highlight-color:transparent;}
+.ov-row:last-child{margin-bottom:0;}
+.ov-row:active{opacity:.72;transform:scale(.97);}
+.ov-row.ov-live{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.28);}
+.ov-icon{font-size:15px;margin-right:10px;flex-shrink:0;}
+.ov-name{flex:1;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#fff;}
+.ov-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.07);flex-shrink:0;}
+.ov-row.ov-live .ov-pill{background:rgba(34,197,94,.15);}
+.ov-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);flex-shrink:0;}
+.ov-row.ov-live .ov-dot{background:var(--green);animation:ovPulse 1.4s ease-in-out infinite;}
+.ov-pill-lbl{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);}
+.ov-row.ov-live .ov-pill-lbl{color:var(--green);}
+
 /* Toast */
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--blue);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;transition:transform .3s;pointer-events:none;z-index:999;}
 .toast.show{transform:translateX(-50%) translateY(0);}
@@ -141,6 +156,15 @@ textarea:focus{outline:none;border-color:var(--blue);}
   </div>
 
   <div class="kbd-hint">Keyboard: Space = start/stop</div>
+</div>
+
+<!-- OVERLAYS -->
+<div class="card">
+  <div class="card-title">🎬 Overlays</div>
+  <div id="ovRows">
+    <!-- populated from SSE state -->
+    <div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px;">connecting…</div>
+  </div>
 </div>
 
 <!-- PERIOD -->
@@ -435,6 +459,9 @@ es.onmessage = e => {
     document.getElementById('playerPicks').style.display = 'block';
   }
 
+  // Overlay visibility panel
+  renderOverlays(d.overlayVisible);
+
   // Refresh logos
   const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
   if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();}
@@ -631,6 +658,35 @@ function saveLineup() {
   const away = document.getElementById('awayLineup').value.split('\n').map(s=>s.trim()).filter(Boolean);
   act('set_lineup', {home, away});
   toast('Lineup pushed ✓');
+}
+
+const OVERLAYS = [
+  { name: 'scoreboard',   icon: '📊', label: 'Scoreboard'   },
+  { name: 'lineup',       icon: '👥', label: 'Lineup'       },
+  { name: 'lowerthird',   icon: '📢', label: 'Lower Third'  },
+  { name: 'startingsoon', icon: '⏰', label: 'Starting Soon'},
+  { name: 'brb',          icon: '☕', label: 'BRB'          },
+];
+
+function renderOverlays(visible) {
+  if (!visible) return;
+  const container = document.getElementById('ovRows');
+  container.innerHTML = OVERLAYS.map(ov => {
+    const live = visible[ov.name] !== false;
+    return `<div class="ov-row${live?' ov-live':''}" onclick="toggleOverlay('${ov.name}')">
+      <span class="ov-icon">${ov.icon}</span>
+      <span class="ov-name">${ov.label}</span>
+      <div class="ov-pill">
+        <div class="ov-dot"></div>
+        <span class="ov-pill-lbl">${live ? 'LIVE' : 'HIDDEN'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleOverlay(name) {
+  const current = gameState.overlayVisible?.[name] !== false;
+  act('overlay_set', { name, visible: !current });
 }
 
 function resyncLineup() {
