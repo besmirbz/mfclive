@@ -27,9 +27,16 @@ function getLocalIP() {
   return '<pc-ip>';
 }
 
-// ── Security token — generated fresh on every server start ────────────────────
-// Anyone who wants to control the overlay must have the URL printed below.
-const SECRET = crypto.randomBytes(6).toString('hex'); // e.g. "a3f9c2b1e4d7"
+// ── Security token — persistent across restarts ────────────────────────────────
+// Stored in token.txt next to server.js. Generated once; delete the file to rotate.
+const TOKEN_FILE = path.join(__dirname, 'token.txt');
+let SECRET;
+if (fs.existsSync(TOKEN_FILE)) {
+  SECRET = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+} else {
+  SECRET = crypto.randomBytes(6).toString('hex');
+  fs.writeFileSync(TOKEN_FILE, SECRET, 'utf8');
+}
 
 // Requests from localhost are always allowed (Streamlabs browser sources).
 // Requests from the network must include ?token=SECRET or X-MFCLIVE-Token header.
@@ -73,7 +80,7 @@ const state = {
   // Half time flag
   halfTime: false,
   // Lower third
-  lowerThird: { visible: false, line1: '', line2: '' },
+  lowerThird: { visible: false, line1: '', line2: '', team: '', event: '' },
   // Lineup
   lineup: {
     home: ['#1 Keeper','#4 Player','#7 Player','#9 Player','#11 Player'],
@@ -137,16 +144,12 @@ setInterval(() => {
 
   const now = Date.now();
 
-  // Auto-expire red cards
-  state.redCards = state.redCards.filter(rc => {
-    const elapsed = now - rc.startedAt;
-    return (rc.remainingMs - elapsed) > 0;
-  });
-  // Update remaining on survivors
+  // Decrement red card timers first, then discard any that have reached zero
   state.redCards.forEach(rc => {
     rc.remainingMs = Math.max(0, rc.remainingMs - (now - rc.startedAt));
     rc.startedAt = now;
   });
+  state.redCards = state.redCards.filter(rc => rc.remainingMs > 0);
 
   // Auto-stop timer at 00:00
   const remaining = getElapsed();
@@ -252,25 +255,64 @@ function handleAction(action, payload) {
       state.halfTime = payload.active === true;
       break;
 
-    case 'lower_show':
-      state.lowerThird = { visible: true, line1: payload.line1||'', line2: payload.line2||'' };
+    case 'lower_show': {
+      const validEvents = ['goal', 'redcard', 'sub'];
+      state.lowerThird = {
+        visible: true,
+        line1: payload.line1||'',
+        line2: payload.line2||'',
+        team:  payload.team  === 'away' ? 'away' : payload.team  === 'home' ? 'home' : '',
+        event: validEvents.includes(payload.event) ? payload.event : '',
+      };
       break;
+    }
 
     case 'lower_hide':
       state.lowerThird = { visible: false, line1: '', line2: '' };
       break;
 
-    case 'set_lineup':
-      if (payload.home) state.lineup.home = payload.home;
-      if (payload.away) state.lineup.away = payload.away;
+    case 'set_lineup': {
+      const SEP = /^---/;
+      // Split a flat lineup array at the '--- Substitutes ---' separator line.
+      function splitLineupText(lines) {
+        const idx = lines.findIndex(l => SEP.test(l.trim()));
+        if (idx === -1) return { starters: lines.filter(Boolean), subs: [] };
+        return {
+          starters: lines.slice(0, idx).filter(Boolean),
+          subs:     lines.slice(idx + 1).filter(Boolean),
+        };
+      }
+      // Parse a '#NUM Name (C)' lineup line into the player object used by quick-pick.
+      function lineupLineToPlayer(line) {
+        const cap   = line.includes(' (C)');
+        const clean = line.replace(' (C)', '').trim();
+        const sp    = clean.indexOf(' ');
+        const num   = sp > 0 ? (parseInt(clean.slice(1, sp)) || 0) : 0;
+        const name  = sp > 0 ? clean.slice(sp + 1).trim() : clean.slice(1).trim();
+        return (name || num) ? { num, name, cap } : null;
+      }
+      if (payload.home) {
+        state.lineup.home = payload.home;
+        const { starters, subs } = splitLineupText(payload.home);
+        state._homeStarters = starters;
+        state._homeSubs     = subs;
+        state._homePlayers  = [...starters, ...subs].map(lineupLineToPlayer).filter(Boolean);
+      }
+      if (payload.away) {
+        state.lineup.away = payload.away;
+        const { starters, subs } = splitLineupText(payload.away);
+        state._awayStarters = starters;
+        state._awaySubs     = subs;
+        state._awayPlayers  = [...starters, ...subs].map(lineupLineToPlayer).filter(Boolean);
+      }
       break;
+    }
     case 'set_team_names':
       if (payload.homeTeam) state.homeTeam = payload.homeTeam.slice(0,6).toUpperCase();
       if (payload.awayTeam) state.awayTeam = payload.awayTeam.slice(0,6).toUpperCase();
       break;
     case 'timer_set':
       state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
-      state.timerStartedAt = Date.now();
       state.timerRunning = false;
       break;
   }
@@ -286,10 +328,15 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   const route = url.pathname;
 
   // Tighten CORS — only allow localhost origins, not the open web
+  // Use URL parsing instead of .includes() to prevent bypass via hostnames like
+  // attacker.localhost.evil.com that would pass a naive string-contains check.
   const origin = req.headers['origin'] || '';
-  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+  try {
+    const o = new URL(origin);
+    if (o.hostname === 'localhost' || o.hostname === '127.0.0.1') {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+  } catch { /* malformed origin — deny */ }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MFCLIVE-Token');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -325,7 +372,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       try {
         const { action, payload } = JSON.parse(body || '{}');
         handleAction(action, payload || {});
-      } catch(e) {}
+      } catch(e) { console.error('[action] parse error:', e.message); }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(getPublicState()));
     });
@@ -392,9 +439,16 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       const homeSplit = splitRoster(ourHomeRoster);
       const awaySplit = splitRoster(ourAwayRoster);
 
-      // lineup.home / lineup.away keep the flat string format for the controller textarea
-      state.lineup.home = [...homeSplit.starters, ...homeSplit.subs].map(formatPlayer);
-      state.lineup.away = [...awaySplit.starters, ...awaySplit.subs].map(formatPlayer);
+      // lineup.home / lineup.away: flat string list for controller textarea.
+      // A '--- Substitutes ---' separator is included when subs exist so the
+      // boundary survives a manual Save & Push round-trip.
+      function buildLineupText(split) {
+        const s = split.starters.map(formatPlayer);
+        const b = split.subs.map(formatPlayer);
+        return b.length ? [...s, '--- Substitutes ---', ...b] : s;
+      }
+      state.lineup.home = buildLineupText(homeSplit);
+      state.lineup.away = buildLineupText(awaySplit);
 
       // Expose starters and subs separately for the lineup overlay
       state._homeStarters = homeSplit.starters.map(formatPlayer);
@@ -522,22 +576,6 @@ p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}
 
   res.writeHead(404); res.end('Not found');
 });
-
-// ── Broadcast tick every 500ms ─────────────────────────────────────────────────
-setInterval(() => {
-  if (!state.timerRunning) return;
-  const now = Date.now();
-  state.redCards = state.redCards.filter(rc => {
-    rc.remainingMs = Math.max(0, rc.remainingMs - (now - rc.startedAt));
-    rc.startedAt = now;
-    return rc.remainingMs > 0;
-  });
-  if (getElapsed() <= 0) {
-    state.timerMs = 0;
-    state.timerRunning = false;
-  }
-  broadcast(getPublicState());
-}, 500);
 
 server.listen(PORT, '0.0.0.0', () => {
   const localIP = getLocalIP();
