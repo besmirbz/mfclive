@@ -87,7 +87,9 @@ Recommended settings regardless of encoder:
 | Keyframe interval | 2s |
 | Audio bitrate | 160 kbps AAC |
 
-For every Browser Source that is **not visible** in the current scene, right-click → Properties → tick **"Shutdown source when not visible"** to reduce GPU load.
+All five Browser Sources can live in a **single scene** — overlay visibility is now controlled from the controller (the 🎬 Overlays card), so you no longer need separate Streamlabs scenes for Starting Soon or BRB.
+
+For any Browser Source you never want running in the background, right-click → Properties → tick **"Shutdown source when not visible"** to reduce GPU load.
 
 ---
 
@@ -187,6 +189,30 @@ Start an unlisted stream to YouTube for 2–3 minutes to confirm video quality, 
 ---
 
 ## Using the Controller
+
+### Overlays
+
+The **🎬 Overlays** card at the top of the controller lets you show or hide any overlay directly — no need to switch scenes in Streamlabs.
+
+Each row shows a live status pill:
+- **● LIVE** (green, pulsing) — the overlay is currently visible on stream
+- **○ HIDDEN** (grey) — the overlay is invisible; the Browser Source is still connected
+
+Tap any row to toggle it. Transitions are animated (each overlay has its own effect).
+
+**Default visibility when the server starts:**
+
+| Overlay | Default |
+|---|---|
+| Scoreboard | ● LIVE |
+| Lineup | ○ HIDDEN |
+| Lower Third | ● LIVE |
+| Starting Soon | ○ HIDDEN |
+| BRB | ○ HIDDEN |
+
+> **Tip:** A typical pre-match flow — show Starting Soon while waiting, then hide it and show the Scoreboard when the game begins. For half time, show BRB, then hide it when play resumes.
+
+---
 
 ### Timer
 
@@ -295,7 +321,7 @@ Full-screen pre-match overlay showing both team logos, names, league, arena, and
 
 ### BRB
 
-Full-screen "We'll Be Right Back" overlay for unexpected breaks. Transparent body — sits over your background image in Streamlabs. No server connection required.
+Full-screen "We'll Be Right Back" overlay for unexpected breaks. Transparent body — sits over your background image in Streamlabs. Connects to the server via SSE so its visibility can be toggled from the 🎬 Overlays card in the controller.
 
 ---
 
