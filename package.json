@@ -1,0 +1,14 @@
+{
+  "name": "mfclive",
+  "version": "1.0.0",
+  "description": "Real-time stream overlay server for Malmö Futsal Club",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "Besmir Pepa",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -17,21 +17,38 @@
   }
   #lt.visible { transform: translateX(0); }
 
-  /* Blue leading edge — the "punch" of the entrance */
+  /* Leading edge — colour set dynamically by event type */
   .lt-edge {
     width: 6px;
     background: #3D82F6;
     flex-shrink: 0;
+    transition: background 0.3s;
   }
 
-  /* Icon block */
-  .lt-icon {
+  /* Team block (logo + short name) — background set dynamically */
+  .lt-team {
     background: rgba(61,130,246,0.88);
     backdrop-filter: blur(10px);
-    width: 80px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 34px;
+    width: 110px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 10px 8px;
     flex-shrink: 0;
+    gap: 5px;
+    transition: background 0.3s;
+  }
+  .lt-team-logo {
+    width: 52px; height: 52px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
+  }
+  .lt-team-name {
+    font-size: 13px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    text-align: center;
+    text-shadow: 0 1px 4px rgba(0,0,0,.8);
   }
 
   /* Text block */
@@ -42,7 +59,65 @@
     padding: 14px 36px 14px 20px;
     min-width: 340px;
     display: flex; flex-direction: column; justify-content: center; gap: 4px;
+    position: relative; overflow: hidden;
   }
+
+  /* Goal: shine sweep */
+  .lt-shine {
+    position: absolute; inset: 0;
+    background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.22) 50%, transparent 70%);
+    background-size: 300% 100%;
+    background-position: -200% center;
+    pointer-events: none; opacity: 0;
+  }
+  @keyframes ltShine {
+    0%   { background-position: -200% center; opacity: 1; }
+    80%  { opacity: 1; }
+    100% { background-position: 220% center; opacity: 0; }
+  }
+  .lt-shine.active { animation: ltShine 0.75s ease-in-out forwards; }
+
+  /* Red card icon block */
+  .lt-rcicon {
+    display: none;
+    width: 56px;
+    align-self: stretch;
+    flex-shrink: 0;
+    background: #dc2626;
+    position: relative;
+  }
+  .lt-rcicon::after {
+    content: '';
+    position: absolute;
+    inset: 10px 9px;
+    border: 2px solid rgba(255,255,255,0.45);
+    border-radius: 3px;
+  }
+  .lt-rcicon.show { display: flex; }
+
+  /* Red card: glow pulse */
+  @keyframes redGlow {
+    0%   { filter: drop-shadow(0 6px 24px rgba(0,0,0,.7)); }
+    25%  { filter: drop-shadow(0 6px 24px rgba(0,0,0,.7)) drop-shadow(0 0 40px rgba(239,68,68,.95)); }
+    55%  { filter: drop-shadow(0 6px 24px rgba(0,0,0,.7)) drop-shadow(0 0 20px rgba(239,68,68,.5)); }
+    100% { filter: drop-shadow(0 6px 24px rgba(0,0,0,.7)); }
+  }
+  #lt.pulse-red { animation: redGlow 1s ease-out forwards; }
+
+  /* Goal: gold glow + scale punch */
+  @keyframes goalGlow {
+    0%   { filter: drop-shadow(0 6px 24px rgba(0,0,0,.7)); }
+    18%  { filter: drop-shadow(0 6px 24px rgba(0,0,0,.2)) drop-shadow(0 0 70px rgba(255,215,0,.95)) drop-shadow(0 0 120px rgba(255,215,0,.5)); }
+    55%  { filter: drop-shadow(0 6px 24px rgba(0,0,0,.5)) drop-shadow(0 0 30px rgba(255,215,0,.35)); }
+    100% { filter: drop-shadow(0 6px 24px rgba(0,0,0,.7)); }
+  }
+  @keyframes goalPunch {
+    0%   { transform: translateX(0) scale(1); }
+    22%  { transform: translateX(0) scale(1.06); }
+    50%  { transform: translateX(0) scale(0.97); }
+    100% { transform: translateX(0) scale(1); }
+  }
+  #lt.pulse-goal { animation: goalGlow 1.4s ease-out, goalPunch 0.55s ease-out; }
 
   .lt-line1 {
     font-size: 44px;
@@ -63,6 +138,7 @@
     text-transform: uppercase;
     text-shadow: 0 1px 6px rgba(0,0,0,.7);
     white-space: nowrap;
+    transition: color 0.3s;
   }
 
   /* Thin accent line at the bottom */
@@ -80,28 +156,165 @@
 <body>
 <div id="lt">
   <div class="lt-edge"></div>
-  <div class="lt-icon">⚽</div>
+  <div class="lt-team" id="ltTeam">
+    <img class="lt-team-logo" id="ltTeamLogo" src="" onerror="this.style.opacity=0.3" />
+    <span class="lt-team-name" id="ltTeamName"></span>
+  </div>
   <div class="lt-body">
+    <div class="lt-shine" id="ltShine"></div>
     <div class="lt-line1" id="ltLine1">Player Name</div>
     <div class="lt-line2" id="ltLine2">GOAL</div>
   </div>
+  <div class="lt-rcicon" id="ltRcIcon"></div>
 </div>
 <div class="lt-foot" id="ltFoot"></div>
 <script>
+const THEMES = {
+  goal:    { color: '#3D82F6', bg: 'rgba(61,130,246,0.88)',  line2: '#7DB8F7' },
+  redcard: { color: '#ef4444', bg: 'rgba(239,68,68,0.88)',   line2: '#fca5a5' },
+  sub:     { color: '#f97316', bg: 'rgba(249,115,22,0.88)',  line2: '#fdba74' },
+};
+
+function applyTheme(event) {
+  const t = THEMES[event] || THEMES.goal;
+  document.querySelector('.lt-edge').style.background = t.color;
+  document.getElementById('ltTeam').style.background  = t.bg;
+  document.getElementById('ltLine2').style.color      = t.line2;
+  document.getElementById('ltFoot').style.background  = `linear-gradient(to right, ${t.color}, transparent)`;
+  // Red card icon: show only for redcard
+  document.getElementById('ltRcIcon').className = 'lt-rcicon' + (event === 'redcard' ? ' show' : '');
+}
+
+// ── FX helpers ─────────────────────────────────────────────────────────────────
+function screenFlash(color, duration) {
+  const fl = document.createElement('div');
+  fl.style.cssText = `position:fixed;inset:0;background:${color};pointer-events:none;z-index:9990;`;
+  document.body.appendChild(fl);
+  fl.animate([{opacity:1},{opacity:0}], {duration: duration||350, easing:'ease-out', fill:'forwards'})
+    .onfinish = () => fl.remove();
+}
+
+function burstParticles(colors, count, spreadMult) {
+  const rect = document.getElementById('lt').getBoundingClientRect();
+  const ox = rect.left + rect.width * 0.3;
+  const oy = rect.top  + rect.height * 0.5;
+  const spread = spreadMult || 1;
+  const n = count || 24;
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('div');
+    const r = Math.random();
+    let w, h, br;
+    if (r < 0.45) {
+      // Circle
+      w = h = 5 + Math.random() * 10; br = '50%';
+    } else if (r < 0.75) {
+      // Square
+      w = h = 4 + Math.random() * 8; br = '2px';
+    } else {
+      // Confetti strip
+      w = 3 + Math.random() * 4; h = 10 + Math.random() * 12; br = '1px';
+    }
+    p.style.cssText = `position:fixed;left:${ox}px;top:${oy}px;width:${w}px;height:${h}px;`
+      + `border-radius:${br};`
+      + `background:${colors[Math.floor(Math.random() * colors.length)]};`
+      + `pointer-events:none;z-index:9991;`;
+    document.body.appendChild(p);
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = (100 + Math.random() * 220) * spread;
+    const tx  = Math.cos(angle) * dist;
+    const ty  = Math.sin(angle) * dist - 70; // bias upward
+    const rot = Math.random() * 720 - 360;
+    p.animate([
+      { transform: `translate(-50%,-50%) scale(1) rotate(0deg)`,                                          opacity: 1 },
+      { transform: `translate(calc(-50% + ${tx}px),calc(-50% + ${ty}px)) scale(0) rotate(${rot}deg)`,    opacity: 0 }
+    ], { duration: 550 + Math.random() * 550, easing: 'ease-out', fill: 'forwards' })
+      .onfinish = () => p.remove();
+  }
+}
+
+function triggerGoalFx() {
+  const GOAL_COLORS = ['#FFD700','#fff','#f59e0b','#FFEC00','#ffe066','#fff','#FFD700'];
+  // Wave 1 — big burst
+  burstParticles(GOAL_COLORS, 42, 1);
+  // Wave 2 — follow-up spread
+  setTimeout(() => burstParticles(GOAL_COLORS, 24, 1.3), 160);
+  // Shine sweep across text block
+  const shine = document.getElementById('ltShine');
+  shine.classList.remove('active');
+  void shine.offsetWidth;
+  shine.classList.add('active');
+  // Gold glow + scale punch on graphic
+  const ltEl = document.getElementById('lt');
+  ltEl.classList.remove('pulse-goal');
+  void ltEl.offsetWidth;
+  ltEl.classList.add('pulse-goal');
+  setTimeout(() => ltEl.classList.remove('pulse-goal'), 1500);
+}
+
+function triggerRedCardFx() {
+  // Red strobe flashes
+  screenFlash('rgba(239,68,68,0.25)', 300);
+  setTimeout(() => screenFlash('rgba(239,68,68,0.15)', 280), 380);
+  // Glow pulse on the graphic
+  const ltEl = document.getElementById('lt');
+  ltEl.classList.remove('pulse-red');
+  void ltEl.offsetWidth;
+  ltEl.classList.add('pulse-red');
+  setTimeout(() => ltEl.classList.remove('pulse-red'), 1100);
+}
+
+// ── SSE ────────────────────────────────────────────────────────────────────────
+let wasVisible = false;
+
 const es = new EventSource('/events');
 es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type !== 'state') return;
   const lt   = document.getElementById('lt');
   const foot = document.getElementById('ltFoot');
+
   if (d.lowerThird.visible) {
     document.getElementById('ltLine1').textContent = d.lowerThird.line1 || '';
     document.getElementById('ltLine2').textContent = d.lowerThird.line2 || '';
+    applyTheme(d.lowerThird.event);
+
+    // Team logo + name
+    const team  = d.lowerThird.team;
+    const logo  = document.getElementById('ltTeamLogo');
+    const tname = document.getElementById('ltTeamName');
+    if (team === 'home' || team === 'away') {
+      logo.src = '/logo/' + team;
+      tname.textContent = team === 'home' ? (d.homeTeam || '') : (d.awayTeam || '');
+    } else {
+      logo.src = '';
+      tname.textContent = '';
+    }
+
+    // Make visible first, THEN fire effects after slide-in completes (0.55s)
     lt.classList.add('visible');
     foot.classList.add('visible');
+
+    if (!wasVisible) {
+      const ev = d.lowerThird.event;
+      // Immediate flashes (no position dependency)
+      if (ev === 'goal') {
+        screenFlash('rgba(255,215,0,0.40)', 280);
+        setTimeout(() => screenFlash('rgba(255,215,0,0.25)', 250), 210);
+        setTimeout(() => screenFlash('rgba(255,215,0,0.15)', 220), 400);
+      }
+      if (ev === 'redcard') screenFlash('rgba(239,68,68,0.3)', 250);
+      // Position-dependent effects after slide-in completes (0.55s transition)
+      setTimeout(() => {
+        if (ev === 'goal')    triggerGoalFx();
+        if (ev === 'redcard') triggerRedCardFx();
+      }, 580);
+    }
+
+    wasVisible = true;
   } else {
     lt.classList.remove('visible');
     foot.classList.remove('visible');
+    wasVisible = false;
   }
 };
 </script>
