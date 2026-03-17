@@ -114,6 +114,7 @@ textarea:focus{outline:none;border-color:var(--blue);}
   <span class="conn" id="conn">connecting…</span>
 </header>
 
+
 <!-- TIMER -->
 <div class="card">
   <div class="card-title">⏱ Effective Time</div>
@@ -243,17 +244,11 @@ textarea:focus{outline:none;border-color:var(--blue);}
     </div>
   </div>
   <div class="kbd-hint">Keyboard: 1=home goal, 2=away goal, Q/W=undo goals, F/G=fouls</div>
-</div>
-
-<!-- RED CARDS -->
-<div class="card">
-  <div class="card-title">🟥 Red Cards (2-min penalty)</div>
-  <div class="rc-form">
-    <input class="rc-input" id="rcPlayer" type="text" placeholder="Player name / number" />
-    <button class="btn btn-red" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="addRC('home')">Home</button>
-    <button class="btn btn-gray" style="flex:0;padding:9px 12px;white-space:nowrap" onclick="addRC('away')">Away</button>
+  <!-- Active penalties — auto-shown when red cards exist -->
+  <div id="rcSection" style="display:none;margin-top:10px;border-top:1px solid rgba(61,130,246,.12);padding-top:10px;">
+    <div style="font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--red);margin-bottom:7px;">🟥 Active Penalties</div>
+    <div class="rc-list" id="rcList"></div>
   </div>
-  <div class="rc-list" id="rcList"><div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px">No active penalties</div></div>
 </div>
 
 <!-- LOWER THIRD -->
@@ -322,7 +317,7 @@ textarea:focus{outline:none;border-color:var(--blue);}
 #14 Player</textarea>
     </div>
   </div>
-  <div class="kbd-hint" style="margin-bottom:8px;">Add <code style="background:#1e2d45;padding:1px 5px;border-radius:3px;font-size:10px;">--- Substitutes ---</code> on its own line to mark the subs boundary</div>
+  <div class="kbd-hint" style="margin-bottom:8px;">Add <code style="background:#1e2d45;padding:1px 5px;border-radius:3px;font-size:10px;">--- On the bench ---</code> on its own line — the text between the dashes becomes the section label</div>
   <div style="display:flex;gap:7px;">
     <button class="btn btn-blue" onclick="saveLineup()" style="flex:1">Save & Push to Overlay</button>
     <button class="btn btn-gray btn-small" id="resyncLineupBtn" onclick="resyncLineup()" title="Clear manual edits and re-sync from server roster">↺ Re-sync</button>
@@ -384,10 +379,13 @@ function renderFouls(dotsId, warnId, count) {
 
 function renderRedCards(cards, homeName, awayName) {
   const el = document.getElementById('rcList');
+  const section = document.getElementById('rcSection');
   if (!cards || !cards.length) {
-    el.innerHTML = '<div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px">No active penalties</div>';
+    section.style.display = 'none';
+    el.innerHTML = '';
     return;
   }
+  section.style.display = '';
   el.innerHTML = cards.map(rc => {
     const tl = rc.team==='home' ? homeName : awayName;
     return '<div class="rc-item">' +
@@ -510,6 +508,7 @@ function pushShortName() {
   }, 400);
 }
 
+
 async function act(action, payload={}) {
   try {
     await fetch('/action', {
@@ -591,12 +590,6 @@ function setHalfTime() {
   }, 8000);
 }
 
-function addRC(team) {
-  const player = document.getElementById('rcPlayer').value.trim();
-  act('red_card_add', { team, player });
-  document.getElementById('rcPlayer').value = '';
-  toast('Red card added — 2 min penalty');
-}
 
 let ltHideTimer = null;
 let ltTeamSide  = '';
@@ -647,7 +640,12 @@ function showLT() {
   const l2 = document.getElementById('ltLine2').value.trim();
   if (!l1) { toast('Enter a name first'); return; }
   act('lower_show', {line1:l1, line2:l2, team: ltTeamSide, event: ltEventType});
-  toast('Lower third shown');
+  if (ltEventType === 'redcard') {
+    act('red_card_add', { team: ltTeamSide || 'home', player: l1 });
+    toast('Red card shown + 2-min penalty started');
+  } else {
+    toast('Lower third shown');
+  }
   clearTimeout(ltHideTimer);
   const dur = parseInt(document.getElementById('ltDuration').value);
   if (dur > 0) ltHideTimer = setTimeout(() => act('lower_hide'), dur * 1000);

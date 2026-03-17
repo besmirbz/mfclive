@@ -456,6 +456,26 @@ if (!kickoff) {
   setInterval(tick, 1000);
 }
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+function fadeAudio(audio, toVol, durationMs) {
+  clearInterval(audio._fadeTimer);
+  const steps = Math.max(1, Math.round(durationMs / 16));
+  const fromVol = audio.volume;
+  let step = 0;
+  audio._fadeTimer = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
+    if (step >= steps) {
+      clearInterval(audio._fadeTimer);
+      if (toVol === 0) audio.pause();
+    }
+  }, durationMs / steps);
+}
+const bgAudio = new Audio('/audio/startingsoon-loop.mp3');
+bgAudio.loop   = true;
+bgAudio.volume = 0;
+let wasStartingSoon = false;
+
 // ── SSE — pull team names, logos, league, arena from server state ────────────
 const es = new EventSource('/events');
 es.onmessage = e => {
@@ -495,7 +515,16 @@ es.onmessage = e => {
   // Hide separator if either is missing
   sepEl.style.display = (d.league && d.arena) ? '' : 'none';
 
-  document.body.classList.toggle('ov-hidden', d.overlayVisible?.startingsoon === false);
+  const nowVisible = d.overlayVisible?.startingsoon !== false;
+  document.body.classList.toggle('ov-hidden', !nowVisible);
+  if (nowVisible && !wasStartingSoon) {
+    bgAudio.currentTime = 0;
+    bgAudio.play().catch(() => {});
+    fadeAudio(bgAudio, 0.6, 800);
+  } else if (!nowVisible && wasStartingSoon) {
+    fadeAudio(bgAudio, 0, 600);
+  }
+  wasStartingSoon = nowVisible;
 };
 </script>
 </body>

@@ -264,6 +264,26 @@ function triggerRedCardFx() {
   setTimeout(() => ltEl.classList.remove('pulse-red'), 1100);
 }
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+function fadeAudio(audio, toVol, durationMs) {
+  clearInterval(audio._fadeTimer);
+  const steps = Math.max(1, Math.round(durationMs / 16));
+  const fromVol = audio.volume;
+  let step = 0;
+  audio._fadeTimer = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
+    if (step >= steps) {
+      clearInterval(audio._fadeTimer);
+      if (toVol === 0) audio.pause();
+    }
+  }, durationMs / steps);
+}
+const goalAudio = new Audio('/audio/goal.mp3');
+const rcAudio   = new Audio('/audio/redcard-whistle.mp3');
+goalAudio.volume = 0;
+rcAudio.volume   = 0;
+
 // ── SSE ────────────────────────────────────────────────────────────────────────
 let wasVisible = false;
 
@@ -311,12 +331,26 @@ es.onmessage = e => {
         if (ev === 'goal')    triggerGoalFx();
         if (ev === 'redcard') triggerRedCardFx();
       }, 580);
+      // Audio — fade in synced to slide-in transition
+      if (ev === 'goal') {
+        goalAudio.currentTime = 0;
+        goalAudio.volume = 0;
+        goalAudio.play().catch(() => {});
+        fadeAudio(goalAudio, 0.85, 250);
+      } else if (ev === 'redcard') {
+        rcAudio.currentTime = 0;
+        rcAudio.volume = 0;
+        rcAudio.play().catch(() => {});
+        fadeAudio(rcAudio, 0.85, 150);
+      }
     }
 
     wasVisible = true;
   } else {
     lt.classList.remove('visible');
     foot.classList.remove('visible');
+    fadeAudio(goalAudio, 0, 500);
+    fadeAudio(rcAudio,   0, 500);
     wasVisible = false;
   }
 };
