@@ -296,7 +296,7 @@ function connectSSE() {
   if (d.homeLogo && hl.dataset.src !== d.homeLogo) { hl.dataset.src=d.homeLogo; hl.src='/logo/home?t='+Date.now(); }
   if (d.awayLogo && al.dataset.src !== d.awayLogo) { al.dataset.src=d.awayLogo; al.src='/logo/away?t='+Date.now(); }
 
-  const ovVisible = d.overlayVisible?.lineup !== false;
+  const ovVisible = (d.overlayVisible||{}).lineup !== false;
   if (ovVisible) { document.body.classList.add('ready'); document.body.classList.remove('ov-hidden'); }
   else           { document.body.classList.add('ov-hidden'); }
 

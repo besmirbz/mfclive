@@ -1,0 +1,6 @@
+{
+  "club": "Malmö Futsal Club",
+  "clubKeywords": ["malmö futsal", "mfc"],
+  "halfDurationMinutes": 20,
+  "port": 3000
+}

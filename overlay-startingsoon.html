@@ -393,71 +393,75 @@
 
 <script src="/audio-util.js"></script>
 <script>
-// ── Parse kickoff time from URL query param ──────────────────────────────────
-// Usage: http://localhost:3000/startingsoon?kickoff=14:30
-function getKickoffDate() {
-  const params = new URLSearchParams(window.location.search);
-  const raw = params.get('kickoff'); // e.g. "14:30"
+// ── Kickoff time management ──────────────────────────────────────────────────
+// Priority: SSE state (set from controller) > URL ?kickoff=HH:MM param (legacy)
+
+function parseKickoffTime(raw) {
   if (!raw || !/^\d{1,2}:\d{2}$/.test(raw)) return null;
   const [h, m] = raw.split(':').map(Number);
   if (h >= 24 || m >= 60 || isNaN(h) || isNaN(m)) return null;
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  // If the time is already in the past today, assume tomorrow
   if (d < new Date()) d.setDate(d.getDate() + 1);
   return d;
 }
 
-const kickoff = getKickoffDate();
+// Parse URL param once on load (legacy fallback)
+const _urlKickoff = parseKickoffTime(new URLSearchParams(window.location.search).get('kickoff'));
+let _stateKickoff = null;
+let _countdownId  = null;
+const fmt2 = n => String(n).padStart(2, '0');
 
-if (!kickoff) {
-  document.getElementById('noKickoff').style.display = 'block';
-  document.getElementById('kickoffChip').style.display = 'none';
-  // Hide digit blocks, show the hint instead
-  document.querySelector('.countdown-digits').style.display = 'none';
-} else {
-  const fmt2 = n => String(n).padStart(2, '0');
-  const kickoffStr = kickoff.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  document.getElementById('kickoffChip').textContent = 'Kickoff at ' + kickoffStr;
+function startCountdown(target) {
+  clearInterval(_countdownId);
+  const noKickoff   = document.getElementById('noKickoff');
+  const chip        = document.getElementById('kickoffChip');
+  const digitsWrap  = document.querySelector('.countdown-digits');
+  const card        = document.getElementById('countdownCard');
+  const label       = document.getElementById('countdownLabel');
+
+  if (!target) {
+    noKickoff.style.display  = 'block';
+    chip.style.display       = 'none';
+    digitsWrap.style.display = 'none';
+    return;
+  }
+
+  noKickoff.style.display  = 'none';
+  digitsWrap.style.display = '';
+  chip.textContent = 'Kickoff at ' + target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  card.classList.remove('starting');
+  label.textContent = 'Kickoff in';
 
   function tick() {
-    const now = new Date();
-    const diff = kickoff - now;
-
+    const diff = target - new Date();
     if (diff <= 0) {
-      // Countdown reached zero
+      clearInterval(_countdownId);
       document.getElementById('cdHours').textContent = '00';
       document.getElementById('cdMins').textContent  = '00';
       document.getElementById('cdSecs').textContent  = '00';
-      document.getElementById('countdownLabel').textContent = "It's time!";
-      document.getElementById('countdownCard').classList.add('starting');
+      label.textContent = "It's time!";
+      card.classList.add('starting');
       return;
     }
-
-    const totalSecs = Math.floor(diff / 1000);
+    const totalSecs  = Math.floor(diff / 1000);
     const h = Math.floor(totalSecs / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
     const s = totalSecs % 60;
-
     document.getElementById('cdHours').textContent = fmt2(h);
     document.getElementById('cdMins').textContent  = fmt2(m);
     document.getElementById('cdSecs').textContent  = fmt2(s);
-
-    // Hide hours block if less than 1 hour remaining
     const hoursBlock = document.getElementById('cdHours').closest('.cd-block');
     const firstSep   = document.querySelector('.cd-sep');
-    if (h === 0) {
-      hoursBlock.style.display = 'none';
-      firstSep.style.display   = 'none';
-    } else {
-      hoursBlock.style.display = '';
-      firstSep.style.display   = '';
-    }
+    if (h === 0) { hoursBlock.style.display = 'none'; firstSep.style.display = 'none'; }
+    else         { hoursBlock.style.display = '';     firstSep.style.display = '';     }
   }
-
   tick();
-  setInterval(tick, 1000);
+  _countdownId = setInterval(tick, 1000);
 }
+
+// Start with URL param (may be null — shows "no kickoff" message until SSE delivers one)
+startCountdown(_urlKickoff);
 
 const bgAudio = new Audio('/audio/startingsoon-loop.mp3');
 bgAudio.loop   = true;
@@ -473,6 +477,18 @@ function connectSSE() {
   es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type !== 'state') return;
+
+  // Update kickoff countdown when controller sets a time
+  if (d.kickoffTime) {
+    const parsed = parseKickoffTime(d.kickoffTime);
+    if (parsed && parsed.getTime() !== _stateKickoff?.getTime()) {
+      _stateKickoff = parsed;
+      startCountdown(_stateKickoff);
+    }
+  } else if (_stateKickoff) {
+    _stateKickoff = null;
+    startCountdown(_urlKickoff); // fall back to URL param
+  }
 
   document.getElementById('homeName').textContent = d.homeTeam || 'MFC';
   document.getElementById('awayName').textContent = d.awayTeam || 'AWAY';
@@ -507,7 +523,7 @@ function connectSSE() {
   // Hide separator if either is missing
   sepEl.style.display = (d.league && d.arena) ? '' : 'none';
 
-  const nowVisible = d.overlayVisible?.startingsoon !== false;
+  const nowVisible = (d.overlayVisible||{}).startingsoon !== false;
   document.body.classList.toggle('ov-hidden', !nowVisible);
   if (nowVisible && !wasStartingSoon) {
     bgAudio.currentTime = 0;

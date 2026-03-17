@@ -223,12 +223,12 @@ function connectSSE(){
   document.getElementById('awayName').textContent=d.awayTeam;
   if(d.homeScore!==prevHome){
     const c=document.getElementById('homeScoreCell');
-    c.classList.remove('scored'); void c.offsetWidth; c.classList.add('scored');
+    if(!c._animating){c.classList.remove('scored');void c.offsetWidth;c.classList.add('scored');c._animating=true;c.addEventListener('animationend',()=>{c._animating=false;},{once:true});}
     prevHome=d.homeScore;
   }
   if(d.awayScore!==prevAway){
     const c=document.getElementById('awayScoreCell');
-    c.classList.remove('scored'); void c.offsetWidth; c.classList.add('scored');
+    if(!c._animating){c.classList.remove('scored');void c.offsetWidth;c.classList.add('scored');c._animating=true;c.addEventListener('animationend',()=>{c._animating=false;},{once:true});}
     prevAway=d.awayScore;
   }
   document.getElementById('homeScore').textContent=d.homeScore;
@@ -246,7 +246,7 @@ function connectSSE(){
   if(d.homeLogo&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();hl.style.opacity=1;}
   if(d.awayLogo&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();al.style.opacity=1;}
   const sb=document.getElementById('sb');
-  const ovVisible = d.overlayVisible?.scoreboard !== false;
+  const ovVisible = (d.overlayVisible||{}).scoreboard !== false;
   if (ovVisible) { sb.classList.add('ready'); sb.classList.remove('ov-hidden'); }
   else           { sb.classList.add('ov-hidden'); }
   };

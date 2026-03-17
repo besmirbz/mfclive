@@ -14,17 +14,123 @@ const fs   = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os   = require('os');
-const PORT = 3000;
+
+// ── Config ───────────────────────────────────────────────────────────────────
+let config = {};
+try {
+  const cfgPath = path.join(__dirname, 'config.json');
+  if (fs.existsSync(cfgPath)) config = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+} catch(e) { console.warn('[config] Could not load config.json — using defaults:', e.message); }
+
+// QR code generation — optional dependency, gracefully skipped if not installed
+let QRCode; try { QRCode = require('qrcode'); } catch(e) { /* optional */ }
+let _qrDataUrl = '';
+
+const PORT = Number(config.port) || 3000;
+const MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : ['malmö futsal', 'mfc'];
 
 // ── Detect local LAN IP ────────────────────────────────────────────────────────
+// Prefers real WiFi/Ethernet adapters; skips virtual adapters (VirtualBox, VMware, WSL, etc.)
 function getLocalIP() {
   const ifaces = os.networkInterfaces();
-  for (const name of Object.keys(ifaces)) {
-    for (const iface of ifaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+  const VIRTUAL  = /vmware|virtualbox|vbox|hyper.?v|wsl|loopback|bluetooth|hamachi|tap|tun|docker|teredo|isatap/i;
+  const PREFERRED = /wi.?fi|wireless|wlan|ethernet|eth|local area/i;
+  let fallback = null;
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    if (VIRTUAL.test(name)) continue;
+    for (const iface of addrs) {
+      if (iface.family !== 'IPv4' || iface.internal) continue;
+      if (PREFERRED.test(name)) return iface.address;
+      if (!fallback) fallback = iface.address;
     }
   }
-  return '<pc-ip>';
+  return fallback || '<pc-ip>';
+}
+
+// ── Cloudflare Quick Tunnel ────────────────────────────────────────────────────
+// Spawns cloudflared (if present in PATH or project dir) and parses the tunnel URL.
+// Requires no account — generates a temporary *.trycloudflare.com URL per session.
+// We wait for cloudflared's "registered" log line before advertising the URL,
+// because cloudflared prints the URL *before* the edge connection is fully ready.
+let _tunnelUrl   = '';
+let _tunnelProc  = null;
+
+function startCloudflaredTunnel(port, onUrl) {
+  const { spawn, spawnSync } = require('child_process');
+  const candidates = [
+    'cloudflared',
+    path.join(__dirname, 'cloudflared.exe'),
+    path.join(__dirname, 'cloudflared'),
+  ];
+
+  let bin = null;
+  for (const c of candidates) {
+    const r = spawnSync(c, ['--version'], { stdio: 'ignore', timeout: 3000 });
+    if (!r.error && r.status === 0) { bin = c; break; }
+  }
+  if (!bin) { console.log('   [tunnel] cloudflared not found — skipping tunnel'); return false; }
+
+  console.log('   [tunnel] starting cloudflared…');
+  // Write a minimal blank config so cloudflared ignores any pre-existing
+  // ~/.cloudflared/config.yaml (which may have named-tunnel ingress rules
+  // with a catch-all http_status:404 that overrides our --url argument).
+  const tmpCfg = path.join(os.tmpdir(), 'mfclive-cf.yaml');
+  try { fs.writeFileSync(tmpCfg, '# mfclive quick tunnel\n', 'utf8'); } catch(e) { /* non-fatal */ }
+
+  try {
+    _tunnelProc = spawn(bin, ['tunnel', '--config', tmpCfg, '--url', `http://127.0.0.1:${port}`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+  } catch(e) { console.warn('   [tunnel] failed to spawn cloudflared:', e.message); return; }
+
+  const urlRe        = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
+  // Matches cloudflared's "Registered tunnel connection connIndex=0" line.
+  // After seeing this we wait PROPAGATION_DELAY for Cloudflare's routing to
+  // propagate to all edge POPs — probing from our own machine is unreliable
+  // because our ISP may route us to a different POP than the one cloudflared
+  // registered with, and that POP returns 404 until propagation completes.
+  const registeredRe     = /Registered tunnel connection.*connIndex=0/i;
+  const PROPAGATION_DELAY = 25000; // 25 s — covers global edge propagation
+
+  let capturedUrl   = null;
+  let fallbackTimer = null;
+
+  function advertise() {
+    if (_tunnelUrl || !capturedUrl) return;
+    _tunnelUrl = capturedUrl;
+    onUrl(_tunnelUrl);
+  }
+
+  function handle(data) {
+    const str = data.toString();
+
+    if (!capturedUrl) {
+      const m = str.match(urlRe);
+      if (m) {
+        capturedUrl = m[0];
+        console.log(`   [tunnel] URL captured — waiting for edge registration…`);
+        fallbackTimer = setTimeout(advertise, 60000);
+      }
+    }
+
+    if (capturedUrl && !_tunnelUrl && registeredRe.test(str)) {
+      clearTimeout(fallbackTimer);
+      console.log(`   [tunnel] registered — waiting ${PROPAGATION_DELAY / 1000}s for global propagation…`);
+      setTimeout(advertise, PROPAGATION_DELAY);
+    }
+  }
+
+  _tunnelProc.stdout.on('data', handle);
+  _tunnelProc.stderr.on('data', handle);
+  _tunnelProc.on('error', e => console.warn('   [tunnel] cloudflared error:', e.message));
+  _tunnelProc.on('exit', code => {
+    if (code !== 0 && code !== null) console.warn(`   [tunnel] cloudflared exited (code ${code})`);
+    if (_tunnelUrl) { _tunnelUrl = ''; console.log('   [tunnel] tunnel disconnected'); }
+  });
+
+  process.on('exit', () => { try { _tunnelProc.kill(); } catch(e) {} });
+  return true; // cloudflared is starting — caller should wait for onUrl before opening browser
 }
 
 // ── Security token — persistent across restarts ────────────────────────────────
@@ -64,7 +170,10 @@ function esc(str) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-const HALF_DURATION_MS = 20 * 60 * 1000; // 20:00
+const HALF_DURATION_MS = (Number(config.halfDurationMinutes) || 20) * 60 * 1000;
+
+// ── Runtime flags ──────────────────────────────────────────────────────────────
+let _wasRestored = false; // set true by restoreState() if a meaningful snapshot was recovered
 
 // ── Game State ─────────────────────────────────────────────────────────────────
 const state = {
@@ -104,6 +213,8 @@ const state = {
   },
   // YouTube stream preview URL (shared across all controller clients)
   ytUrl: '',
+  // Kickoff time for Starting Soon overlay (HH:MM string, settable from controller)
+  kickoffTime: '',
 };
 
 // ── State persistence ──────────────────────────────────────────────────────────
@@ -123,13 +234,14 @@ function saveState() {
     lowerThird: { ...state.lowerThird, visible: false },
     lineup: state.lineup,
     overlayVisible: state.overlayVisible,
-    arena: state.arena, league: state.league,
+    ytUrl: state.ytUrl,
+    arena: state.arena, league: state.league, kickoffTime: state.kickoffTime || '',
     _homePlayers: state._homePlayers || [], _homeStarters: state._homeStarters || [],
     _homeSubs: state._homeSubs || [],       _homeSepLabel: state._homeSepLabel || 'Substitutes',
     _awayPlayers: state._awayPlayers || [], _awayStarters: state._awayStarters || [],
     _awaySubs: state._awaySubs || [],       _awaySepLabel: state._awaySepLabel || 'Substitutes',
   };
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify(snapshot), 'utf8'); } catch { /* non-fatal */ }
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify(snapshot), 'utf8'); } catch (e) { console.error('[state] save failed:', e.message); }
 }
 
 function restoreState() {
@@ -153,6 +265,7 @@ function restoreState() {
       lowerThird: snap.lowerThird || state.lowerThird,
       lineup:    snap.lineup    || state.lineup,
       overlayVisible: snap.overlayVisible || state.overlayVisible,
+      ytUrl:     snap.ytUrl || '',
       arena:     snap.arena  || '',
       league:    snap.league || '',
       _homePlayers:  snap._homePlayers  || [],
@@ -163,7 +276,12 @@ function restoreState() {
       _awayStarters: snap._awayStarters || [],
       _awaySubs:     snap._awaySubs     || [],
       _awaySepLabel: snap._awaySepLabel || 'Substitutes',
+      kickoffTime:   snap.kickoffTime   || '',
     });
+    if ((snap.homeScore || 0) > 0 || (snap.awayScore || 0) > 0 ||
+        (snap.timerMs != null && snap.timerMs < HALF_DURATION_MS - 5000)) {
+      _wasRestored = true;
+    }
     console.log(`[state] Restored from snapshot — ${state.homeTeam} ${state.homeScore}–${state.awayScore} ${state.awayTeam}`);
   } catch (e) {
     console.warn('[state] Could not restore state:', e.message);
@@ -177,8 +295,8 @@ const clients = new Set();
 
 function broadcast(data) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
-  for (const res of clients) {
-    try { res.write(msg); } catch(e) { clients.delete(res); }
+  for (const res of [...clients]) {
+    try { res.write(msg); } catch(e) { clients.delete(res); console.error('[sse] dropped client:', e.message); }
   }
 }
 
@@ -213,8 +331,10 @@ function getPublicState() {
     lineup:          state.lineup,
     overlayVisible:  state.overlayVisible,
     ytUrl:           state.ytUrl,
+    kickoffTime:     state.kickoffTime || '',
     arena:           state.arena,
-    league:       state.league,
+    league:          state.league,
+    wasRestored:     _wasRestored,
     homePlayers:  state._homePlayers || [],
     awayPlayers:  state._awayPlayers || [],
     homeStarters:  state._homeStarters  || [],
@@ -268,11 +388,13 @@ function handleAction(action, payload) {
 
     case 'timer_stop':
       if (state.timerRunning) {
+        const now = Date.now();
         state.timerMs      = getElapsed();
         state.timerRunning = false;
-        // Freeze red card remaining
+        // Freeze red card remaining and reset startedAt so next start is clean
         state.redCards.forEach(rc => {
-          rc.remainingMs = Math.max(0, rc.remainingMs - (Date.now() - rc.startedAt));
+          rc.remainingMs = Math.max(0, rc.remainingMs - (now - rc.startedAt));
+          rc.startedAt = now;
         });
       }
       break;
@@ -351,8 +473,8 @@ function handleAction(action, payload) {
       const validEvents = ['goal', 'redcard', 'sub'];
       state.lowerThird = {
         visible: true,
-        line1: payload.line1||'',
-        line2: payload.line2||'',
+        line1: (payload.line1||'').slice(0, 100),
+        line2: (payload.line2||'').slice(0, 100),
         team:  payload.team  === 'away' ? 'away' : payload.team  === 'home' ? 'home' : '',
         event: validEvents.includes(payload.event) ? payload.event : '',
       };
@@ -424,6 +546,31 @@ function handleAction(action, payload) {
       state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;
       break;
+
+    case 'set_yt_url':
+      state.ytUrl = String(payload.url || '').slice(0, 300);
+      break;
+
+    case 'set_kickoff':
+      state.kickoffTime = String(payload.time || '').slice(0, 5);
+      break;
+
+    case 'reset_game':
+      state.homeScore    = 0;
+      state.awayScore    = 0;
+      state.homeFouls    = 0;
+      state.awayFouls    = 0;
+      state.redCards     = [];
+      state.period       = 1;
+      state.halfTime     = false;
+      state.timerMs      = HALF_DURATION_MS;
+      state.timerBaseMs  = HALF_DURATION_MS;
+      state.timerRunning = false;
+      state.timerStart   = null;
+      state.lowerThird   = { visible: false, line1: '', line2: '', team: '', event: '' };
+      _wasRestored       = false;
+      // Intentionally keep: team names, logos, lineups, arena, league, kickoffTime, ytUrl
+      break;
   }
   broadcast(getPublicState());
   saveState();
@@ -436,7 +583,6 @@ const https = require('https');
 function processRosterData(timeline, lineup) {
   const hdr = timeline?.GameHeaderInfo || {};
 
-  const MFC_KEYWORDS = ['malmö futsal', 'mfc'];
   const fogisHomeName = (hdr.HomeTeamDisplayName || '').toLowerCase();
   const mfcIsHome = MFC_KEYWORDS.some(k => fogisHomeName.includes(k));
 
@@ -449,8 +595,9 @@ function processRosterData(timeline, lineup) {
 
   function abbreviateTeam(name) {
     if (!name) return name;
+    const t = name.trim(); if (!t) return name;
     const KEEP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','ifk','iff','fik']);
-    return name.trim().split(/\s+/)
+    return t.split(/\s+/)
       .map(w => (KEEP.has(w.toLowerCase()) || (w === w.toUpperCase() && w.length <= 4))
         ? w.toUpperCase() : w[0].toUpperCase())
       .join('').slice(0, 6);
@@ -510,6 +657,15 @@ function processRosterData(timeline, lineup) {
 
 
 
+// ── Rate limiter — max 20 /action requests per token per second ────────────────
+const _actionRate = new Map();
+function checkRateLimit(token) {
+  const now = Date.now();
+  let e = _actionRate.get(token);
+  if (!e || now >= e.resetAt) { e = { count: 0, resetAt: now + 1000 }; _actionRate.set(token, e); }
+  return ++e.count <= 20;
+}
+
 // ── HTTP Server ────────────────────────────────────────────────────────────────
 
 // ── Single consolidated HTTP router ───────────────────────────────────────────
@@ -545,6 +701,21 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     return;
   }
 
+  // ── Status API — polled by setup page to pick up tunnel URL when ready ──────
+  if (route === '/api/status') {
+    const localControllerUrl  = `http://${getLocalIP()}:${PORT}/controller?token=${SECRET}`;
+    const tunnelControllerUrl = _tunnelUrl ? `${_tunnelUrl}/controller?token=${SECRET}` : null;
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({
+      localUrl:   localControllerUrl,
+      tunnelUrl:  tunnelControllerUrl,
+      qrDataUrl:  _qrDataUrl,
+      club:       config.club || 'MFCLIVE',
+      port:       PORT,
+    }));
+    return;
+  }
+
   // ── SSE stream ──────────────────────────────────────────────────────────────
   if (route === '/events') {
     res.writeHead(200, {
@@ -556,7 +727,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     res.write(`data: ${JSON.stringify(getPublicState())}\n\n`);
     clients.add(res);
     // Keepalive ping every 25 s — prevents Cloudflare from closing idle tunnels
-    const ping = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { clearInterval(ping); } }, 25000);
+    const ping = setInterval(() => { if (!res.writableEnded) { try { res.write(': keepalive\n\n'); } catch { clearInterval(ping); } } }, 25000);
     req.on('close', () => { clients.delete(res); clearInterval(ping); });
     return;
   }
@@ -566,8 +737,10 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     if (!(req.headers['content-type'] || '').startsWith('application/json')) {
       res.writeHead(415, { 'Content-Type': 'text/plain' }); res.end('Unsupported Media Type'); return;
     }
+    const rateKey = req.headers['x-mfclive-token'] || url.searchParams.get('token') || req.socket.remoteAddress || 'anon';
+    if (!checkRateLimit(rateKey)) { res.writeHead(429, { 'Content-Type': 'text/plain' }); res.end('Too Many Requests'); return; }
     let body = '';
-    req.on('data', d => { body += d; if (body.length > 8192) { res.writeHead(413); res.end('Too large'); req.destroy(); } });
+    req.on('data', d => { body += d; if (body.length > 8192) { res.writeHead(413); res.end('Too large'); req.socket.destroy(); } });
     req.on('end', () => {
       try {
         const { action, payload } = JSON.parse(body || '{}');
@@ -579,7 +752,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     return;
   }
 
-  // ── Import roster (called by bookmarklet — legacy support) ─────────────────
+  // ── Import roster (called by bookmarklet — legacy support) ─��───────────────
   if (route === '/import-roster') {
     function successPage(r) {
       return `<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -606,7 +779,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     }
     if (req.method === 'POST') {
       let body = '';
-      req.on('data', d => { body += d; if (body.length > 512 * 1024) { res.writeHead(413); res.end('Too large'); req.destroy(); } });
+      req.on('data', d => { body += d; if (body.length > 512 * 1024) { res.writeHead(413); res.end('Too large'); req.socket.destroy(); } });
       req.on('end', () => {
         try {
           let timeline, lineup;
@@ -634,6 +807,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     '/':              'controller.html',
     '/controller':    'controller.html',
     '/bookmarklet':   'bookmarklet.html',
+    '/setup':         'setup.html',
     '/scoreboard':    'overlay-scoreboard.html',
     '/lowerthird':    'overlay-lowerthird.html',
     '/lineup':        'overlay-lineup.html',
@@ -647,9 +821,17 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     const fp = path.join(__dirname, file);
     if (fs.existsSync(fp)) {
       let html = fs.readFileSync(fp, 'utf8');
-      // Inject the session token into pages that need it
+      // Inject session token into controller and bookmarklet
       if (file === 'controller.html' || file === 'bookmarklet.html') {
         html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};</script>\n</head>`);
+      }
+      // Inject setup data (QR, URLs, club name) into setup page
+      if (file === 'setup.html') {
+        const localUrl   = `http://${getLocalIP()}:${PORT}/controller?token=${SECRET}`;
+        const tunnelUrl  = _tunnelUrl ? `${_tunnelUrl}/controller?token=${SECRET}` : null;
+        const controllerUrl = tunnelUrl || localUrl;
+        const setupData = { qrDataUrl: _qrDataUrl, controllerUrl, port: PORT, club: config.club || 'MFCLIVE' };
+        html = html.replace('</head>', `<script>window._SETUP=${JSON.stringify(setupData)};</script>\n</head>`);
       }
       const ct = jsFiles.has(file) ? 'application/javascript' : 'text/html';
       res.writeHead(200, { 'Content-Type': ct });
@@ -694,7 +876,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       logoRes.pipe(res);
     });
     logoReq.on('timeout', () => { logoReq.destroy(); res.writeHead(504); res.end('Logo fetch timed out'); });
-    logoReq.on('error', () => { if (!res.headersSent) { res.writeHead(502); res.end('Logo fetch failed'); } });
+    logoReq.on('error', () => { logoReq.destroy(); if (res.headersSent) { res.end(); } else { res.writeHead(502); res.end('Logo fetch failed'); } });
     return;
   }
 
@@ -718,11 +900,16 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   const localIP = getLocalIP();
+  const maskedToken = SECRET.slice(0, 2) + '****' + SECRET.slice(-2);
+  const controllerUrl = `http://${localIP}:${PORT}/controller?token=${SECRET}`;
+
   console.log(`\n✅  MFCLIVE — Overlay Server  (port ${PORT})`);
+  console.log(`\n   ── Setup page (open in browser on this PC) ──`);
+  console.log(`   Setup         →  http://localhost:${PORT}/setup`);
   console.log(`\n   ── Open this on your phone ──`);
-  console.log(`   Controller    →  http://${localIP}:${PORT}/controller?token=${SECRET}`);
+  console.log(`   Controller    →  http://${localIP}:${PORT}/controller?token=${maskedToken}  (token masked — see token.txt)`);
   console.log(`\n   ── Bookmarklet setup (open once to configure) ──`);
-  console.log(`   Bookmarklet   →  http://${localIP}:${PORT}/bookmarklet?token=${SECRET}`);
+  console.log(`   Bookmarklet   →  http://${localIP}:${PORT}/bookmarklet?token=${maskedToken}  (token masked — see token.txt)`);
   console.log(`\n   ── Streamlabs Browser Sources (localhost — no token needed) ──`);
   console.log(`   Scoreboard    →  http://localhost:${PORT}/scoreboard`);
   console.log(`   Lower Third   →  http://localhost:${PORT}/lowerthird`);
@@ -730,4 +917,51 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`   Starting Soon →  http://localhost:${PORT}/startingsoon`);
   console.log(`   BRB           →  http://localhost:${PORT}/brb`);
   console.log('\n   Stop: Ctrl + C\n');
+
+  // Opens the setup page in the default browser (Windows).
+  function openBrowser() {
+    try {
+      const { spawn } = require('child_process');
+      spawn('cmd', ['/c', 'start', '', `http://localhost:${PORT}/setup`],
+        { detached: true, stdio: 'ignore', windowsHide: true });
+    } catch(e) { /* non-fatal */ }
+  }
+
+  // Generates a QR data URL (for setup page) and prints to terminal.
+  function generateQR(url) {
+    if (!QRCode) return;
+    QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 1 }, (_err, dataUrl) => {
+      if (!_err) _qrDataUrl = dataUrl;
+    });
+    QRCode.toString(url, { type: 'terminal', small: true }, (_err, str) => {
+      if (str) console.log('   Scan to open controller on phone:\n' + str);
+    });
+  }
+
+  // Start Cloudflare Quick Tunnel. Open the browser only when the tunnel is
+  // ready so the setup page shows the tunnel QR immediately on load.
+  // If cloudflared is unavailable, fall back to opening with the local URL.
+  const tunnelStarting = startCloudflaredTunnel(PORT, tunnelBase => {
+    const tunnelControllerUrl = `${tunnelBase}/controller?token=${SECRET}`;
+    console.log(`\n   ☁  Tunnel ready — works from any network:`);
+    console.log(`   Controller  →  ${tunnelBase}/controller?token=${SECRET.slice(0,2)}****${SECRET.slice(-2)}\n`);
+    generateQR(tunnelControllerUrl);
+    openBrowser();
+  });
+
+  if (!tunnelStarting) {
+    // No cloudflared — generate local QR and open browser immediately.
+    generateQR(controllerUrl);
+    openBrowser();
+  }
+});
+
+server.on('error', e => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n❌  Port ${PORT} is already in use.`);
+    console.error(`   Another MFCLIVE server may already be running.`);
+    console.error(`   Close it first, or change the port in config.json.\n`);
+    process.exit(1);
+  }
+  throw e;
 });

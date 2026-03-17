@@ -3,6 +3,8 @@
 // Smoothly ramps an HTMLAudioElement's volume from its current level to
 // toVol over durationMs, then pauses if the target is 0.
 function fadeAudio(audio, toVol, durationMs) {
+  toVol = Math.max(0, Math.min(1, toVol));
+  durationMs = Math.max(0, durationMs);
   clearInterval(audio._fadeTimer);
   const steps = Math.max(1, Math.round(durationMs / 16));
   const fromVol = audio.volume;

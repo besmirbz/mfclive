@@ -96,14 +96,24 @@ function buildBookmarklet(serverUrl) {
   const srv = (serverUrl || 'http://localhost:3000').replace(/\/$/, '');
   const tok = TOKEN;
   // Minified fetch-based bookmarklet — no popup, inline status banner
+  // FOGIS public SharedSecret — required by the API, constant value for all public requests
   return `javascript:(function(){var m=location.href.match(/(\\d{6,})/);if(!m){alert('No game ID found — open the game page on minfotboll.se first.');return;}var id=m[1],srv=${JSON.stringify(srv)},tok=${JSON.stringify(tok)},api='https://minfotboll-api.azurewebsites.net/api';var s=document.createElement('div');s.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:#050B18;color:#7DB8F7;border:2px solid #3D82F6;border-radius:8px;padding:14px 20px;font-family:sans-serif;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);min-width:220px;transition:border-color .3s,color .3s;';s.textContent='\\u26bd Fetching roster\\u2026';document.body.appendChild(s);Promise.all([fetch(api+'/followgameapi/initpubliclivetimelineblurbs?GameID='+id+'&SharedSecret=THIS_IS_MAGIC_VALUE').then(function(r){return r.json();}),fetch(api+'/magazinegameviewapi/initgamelineups?GameID='+id).then(function(r){return r.json();})]).then(function(r){s.textContent='\\ud83d\\udce1 Sending to overlay\\u2026';return fetch(srv+'/import-roster',{method:'POST',headers:{'Content-Type':'application/json','X-MFCLIVE-Token':tok},body:JSON.stringify({timeline:r[0],lineup:r[1]})});}).then(function(r){if(!r.ok)throw new Error('Server returned '+r.status);return r.json();}).then(function(d){s.style.borderColor='#22c55e';s.style.color='#22c55e';s.textContent='\\u2705 '+d.homeTeam+' vs '+d.awayTeam+' \\u00b7 '+d.homePlayers+'+'+d.awayPlayers+' players';setTimeout(function(){s.remove();},4000);}).catch(function(e){s.style.borderColor='#ef4444';s.style.color='#ef4444';s.textContent='\\u274c '+e.message;setTimeout(function(){s.remove();},6000);});})();`;
 }
 
 const urlInput = document.getElementById('serverUrl');
 const codeEl   = document.getElementById('bmCode');
 
+function isValidServerUrl(url) {
+  try { const u = new URL(url); return u.protocol === 'http:' || u.protocol === 'https:'; }
+  catch { return false; }
+}
+
 function refresh() {
-  codeEl.textContent = buildBookmarklet(urlInput.value.trim());
+  const url = urlInput.value.trim();
+  const valid = isValidServerUrl(url);
+  document.getElementById('copyBtn').disabled = !valid;
+  document.getElementById('copyBtn').title = valid ? '' : 'Enter a valid http(s):// URL first';
+  codeEl.textContent = valid ? buildBookmarklet(url) : '— enter a valid server URL above —';
 }
 
 // Default URL to current page origin when served from the server
@@ -112,20 +122,27 @@ urlInput.addEventListener('input', refresh);
 refresh();
 
 function copyCode() {
-  const code = buildBookmarklet(urlInput.value.trim());
-  navigator.clipboard.writeText(code).then(() => {
-    const btn = document.getElementById('copyBtn');
+  const url = urlInput.value.trim();
+  if (!isValidServerUrl(url)) { alert('Enter a valid http(s):// server URL first.'); return; }
+  const code = buildBookmarklet(url);
+  const btn = document.getElementById('copyBtn');
+  function onSuccess() {
     btn.textContent = '✓ Copied!';
     btn.classList.add('done');
     setTimeout(() => { btn.textContent = 'Copy to Clipboard'; btn.classList.remove('done'); }, 2500);
-  }).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = code;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    document.getElementById('copyBtn').textContent = '✓ Copied!';
+  }
+  navigator.clipboard.writeText(code).then(onSuccess).catch(() => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onSuccess();
+    } catch (err) {
+      alert('Copy failed — please select the code manually and copy it.');
+    }
   });
 }
 </script>

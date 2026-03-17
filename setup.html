@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!-- MFCLIVE | © 2025 Besmir Pepa -->
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MFCLIVE — Setup</title>
+<style>
+:root {
+  --navy: #050B18; --card: #0d1829; --blue: #3D82F6; --lblue: #7DB8F7;
+  --green: #22c55e; --border: rgba(61,130,246,.2);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--navy); color:#fff; font-family:-apple-system,'Helvetica Neue',Arial,sans-serif; padding:20px; max-width:640px; margin:0 auto; min-height:100vh; }
+
+header { display:flex; align-items:baseline; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:20px; }
+header h1 { font-size:22px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:var(--lblue); }
+header .sub { font-size:11px; color:rgba(125,184,247,.4); letter-spacing:.1em; text-transform:uppercase; }
+
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+.card-title { font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--blue); margin-bottom:14px; }
+
+/* Status */
+.status-row { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; }
+.pulse-dot { width:9px; height:9px; border-radius:50%; background:var(--green); flex-shrink:0; animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.4)} 50%{opacity:.5;box-shadow:0 0 0 6px rgba(34,197,94,0)} }
+
+/* Open controller button */
+.open-btn {
+  display:block; width:100%; padding:16px; margin-bottom:14px;
+  background:var(--blue); color:#fff; border:none; border-radius:10px;
+  font-size:15px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+  cursor:pointer; text-align:center; text-decoration:none; font-family:inherit;
+  transition:opacity .15s;
+}
+.open-btn:active { opacity:.8; }
+
+/* QR */
+.qr-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+.qr-wrap img { width:200px; height:200px; border-radius:8px; background:#fff; padding:10px; }
+.qr-missing { width:200px; height:200px; border-radius:8px; background:rgba(61,130,246,.07); border:1px dashed rgba(61,130,246,.3); display:flex; align-items:center; justify-content:center; font-size:11px; color:rgba(125,184,247,.4); text-align:center; padding:20px; line-height:1.6; }
+.qr-url { font-size:11px; color:rgba(125,184,247,.5); word-break:break-all; line-height:1.6; text-align:center; max-width:400px; }
+
+/* URL list */
+.url-row { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid rgba(61,130,246,.08); }
+.url-row:last-child { border-bottom:none; }
+.url-label { font-size:12px; font-weight:700; color:rgba(255,255,255,.55); width:120px; flex-shrink:0; }
+.url-val { flex:1; font-size:12px; color:var(--lblue); word-break:break-all; line-height:1.5; }
+.copy-btn { background:#1e2d45; border:none; color:var(--lblue); border-radius:5px; padding:5px 10px; font-size:11px; font-weight:800; cursor:pointer; flex-shrink:0; font-family:inherit; transition:background .15s,color .15s; }
+.copy-btn:active { opacity:.7; }
+.copy-btn.copied { background:rgba(34,197,94,.15); color:var(--green); }
+
+/* CSS block */
+.css-hint { font-size:11px; color:rgba(255,255,255,.35); line-height:1.6; margin-bottom:10px; }
+.css-block { background:#060e1c; border:1px solid rgba(61,130,246,.18); border-radius:6px; padding:10px 14px; font-family:'Courier New',monospace; font-size:12px; color:rgba(125,184,247,.75); margin-bottom:8px; }
+.note { font-size:11px; color:rgba(125,184,247,.3); line-height:1.6; margin-top:10px; }
+
+/* Footer */
+footer { font-size:10px; color:rgba(125,184,247,.18); letter-spacing:.1em; text-transform:uppercase; text-align:center; padding:20px 0 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MFCLIVE</h1>
+  <span class="sub" id="clubName">Setup</span>
+</header>
+
+<!-- Server status -->
+<div class="card">
+  <div class="card-title">Server Status</div>
+  <div class="status-row">
+    <div class="pulse-dot"></div>
+    <span>Running on port <strong id="portNum">3000</strong></span>
+  </div>
+</div>
+
+<!-- Open controller -->
+<a class="open-btn" id="controllerLink" href="#" target="_blank">Open Controller on This Device</a>
+
+<!-- QR code -->
+<div class="card">
+  <div class="card-title">📱 Open Controller on Phone</div>
+  <div class="qr-wrap">
+    <div id="qrImgWrap"></div>
+    <p class="qr-url" id="qrUrl"></p>
+  </div>
+  <div id="tunnelStatus" style="margin-top:10px;font-size:11px;text-align:center;color:rgba(125,184,247,.4);line-height:1.6;">
+    ☁ Waiting for Cloudflare tunnel…<br><span style="opacity:.6">QR will update to a public URL — works outside local WiFi</span>
+  </div>
+</div>
+
+<!-- Browser sources -->
+<div class="card">
+  <div class="card-title">🎬 Streamlabs Browser Sources</div>
+  <p class="css-hint">Add each as a Browser Source at <strong>1920×1080</strong>. Paste the CSS below into the <em>Custom CSS</em> field for each one.</p>
+  <div class="css-block" id="cssText">body { background-color: rgba(0,0,0,0) !important; }</div>
+  <button class="copy-btn" onclick="copyText(document.getElementById('cssText').textContent, this)">Copy CSS</button>
+  <div style="margin-top:14px;" id="urlList"></div>
+  <p class="note">Scoreboard, Lower Third, and Lineup go in your main scene. Starting Soon and BRB can share a scene — their visibility is controlled from the controller.</p>
+</div>
+
+<footer>© 2025 Besmir Pepa · MFCLIVE</footer>
+
+<script>
+const s = window._SETUP || {};
+const port = s.port || 3000;
+const club = s.club || 'MFCLIVE';
+const controllerUrl = s.controllerUrl || ('http://localhost:' + port + '/controller');
+const qrDataUrl = s.qrDataUrl || '';
+
+document.getElementById('clubName').textContent = club;
+document.getElementById('portNum').textContent = port;
+document.getElementById('qrUrl').textContent = controllerUrl;
+document.getElementById('controllerLink').href = controllerUrl;
+
+// QR image
+const qrWrap = document.getElementById('qrImgWrap');
+if (qrDataUrl) {
+  const img = document.createElement('img');
+  img.src = qrDataUrl;
+  img.alt = 'QR code for controller';
+  qrWrap.appendChild(img);
+} else {
+  qrWrap.innerHTML = '<div class="qr-missing">QR unavailable — run<br><code>npm install</code><br>to enable</div>';
+}
+
+// Browser source list
+const sources = [
+  { label: 'Scoreboard',    path: '/scoreboard' },
+  { label: 'Lower Third',   path: '/lowerthird' },
+  { label: 'Lineup',        path: '/lineup' },
+  { label: 'Starting Soon', path: '/startingsoon' },
+  { label: 'BRB',           path: '/brb' },
+];
+const list = document.getElementById('urlList');
+sources.forEach(src => {
+  const url = 'http://localhost:' + port + src.path;
+  const row = document.createElement('div');
+  row.className = 'url-row';
+  row.innerHTML =
+    '<span class="url-label">' + src.label + '</span>' +
+    '<span class="url-val">' + url + '</span>' +
+    '<button class="copy-btn" data-url="' + url + '">Copy</button>';
+  list.appendChild(row);
+});
+list.querySelectorAll('.copy-btn[data-url]').forEach(btn => {
+  btn.addEventListener('click', () => copyText(btn.dataset.url, btn));
+});
+
+// ── Poll /api/status until tunnel URL is ready (max ~60s) ──────────────────
+function updateQR(url, dataUrl) {
+  document.getElementById('qrUrl').textContent = url;
+  document.getElementById('controllerLink').href = url;
+  const wrap = document.getElementById('qrImgWrap');
+  wrap.innerHTML = '';
+  if (dataUrl) {
+    const img = document.createElement('img');
+    img.src = dataUrl; img.alt = 'QR code for controller';
+    wrap.appendChild(img);
+  }
+}
+
+let _pollCount = 0;
+const _poll = setInterval(async () => {
+  _pollCount++;
+  if (_pollCount > 30) {
+    clearInterval(_poll);
+    document.getElementById('tunnelStatus').textContent = 'cloudflared not available — controller works on local WiFi only';
+    return;
+  }
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    if (d.tunnelUrl) {
+      clearInterval(_poll);
+      updateQR(d.tunnelUrl, d.qrDataUrl);
+      document.getElementById('tunnelStatus').innerHTML =
+        '☁ <strong style="color:#22c55e">Tunnel active</strong> — QR works from any network';
+    }
+  } catch(e) { /* server not ready yet */ }
+}, 2000);
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => done(btn)).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); done(btn);
+  });
+}
+function done(btn) {
+  const orig = btn.textContent;
+  btn.textContent = 'Copied ✓'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1800);
+}
+</script>
+</body>
+</html>

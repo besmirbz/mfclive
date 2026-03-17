@@ -101,6 +101,13 @@ textarea:focus{outline:none;border-color:var(--blue);}
 .ov-pill-lbl{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);}
 .ov-row.ov-live .ov-pill-lbl{color:var(--green);}
 
+/* Restore banner */
+.restore-banner{display:none;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.35);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:none;align-items:center;gap:10px;}
+.restore-banner.show{display:flex;}
+.restore-banner-text{flex:1;font-size:12px;font-weight:700;color:#fef3c7;line-height:1.4;}
+.restore-banner-dismiss{background:none;border:none;color:rgba(254,243,199,.5);font-size:16px;cursor:pointer;padding:0 4px;flex-shrink:0;}
+.restore-banner-dismiss:active{opacity:.6;}
+
 /* Toast */
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--blue);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;transition:transform .3s;pointer-events:none;z-index:999;}
 .toast.show{transform:translateX(-50%) translateY(0);}
@@ -120,6 +127,13 @@ textarea:focus{outline:none;border-color:var(--blue);}
   <p style="font-size:9px;color:rgba(125,184,247,.3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px;">© 2025 Besmir Pepa</p>
   <span class="conn" id="conn">connecting…</span>
 </header>
+
+<!-- Restore notification — shown when server restarts mid-game and recovers state -->
+<div class="restore-banner" id="restoreBanner">
+  <span style="font-size:18px;flex-shrink:0;">⚠️</span>
+  <span class="restore-banner-text" id="restoreBannerText">Game state restored from last session.</span>
+  <button class="restore-banner-dismiss" onclick="dismissRestoreBanner()" title="Dismiss">✕</button>
+</div>
 
 
 <!-- TIMER -->
@@ -173,6 +187,19 @@ textarea:focus{outline:none;border-color:var(--blue);}
     <!-- populated from SSE state -->
     <div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px;">connecting…</div>
   </div>
+  <!-- Kickoff time — drives the Starting Soon countdown -->
+  <div style="border-top:1px solid rgba(61,130,246,.12);margin-top:10px;padding-top:10px;display:flex;align-items:center;gap:8px;">
+    <span style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(125,184,247,.5);flex-shrink:0;">⏰ Kickoff</span>
+    <input type="time" id="kickoffInput" style="background:#0a1525;border:1px solid var(--border);color:#fff;border-radius:6px;padding:7px 10px;font-size:14px;font-family:inherit;flex:1;min-width:0;" />
+    <button class="btn btn-blue btn-small" onclick="setKickoff()">Set</button>
+  </div>
+</div>
+
+<!-- NEW GAME — resets scores, timer, fouls; keeps team names and lineups -->
+<div class="card" style="border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.04);">
+  <div class="card-title" style="color:var(--red);">⚠ New Game</div>
+  <p style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px;line-height:1.5;">Resets score, timer, fouls, and penalties back to zero. Team names and lineups are kept.</p>
+  <button class="btn btn-red" style="width:100%" onclick="confirmNewGame()">⟳ Reset for New Game</button>
 </div>
 
 <!-- PERIOD -->
@@ -356,6 +383,7 @@ let tickInterval;
 let prevRosterKey = ''; // tracks last known roster fingerprint to detect fresh imports
 let _prevHomePlayerBtnKey = '';
 let _prevAwayPlayerBtnKey = '';
+let _restoreBannerShown = false;
 
 function fmt(ms) {
   const s = Math.ceil(Math.max(0, ms) / 1000);
@@ -423,21 +451,30 @@ function renderRedCards(cards, homeName, awayName) {
 
 // ── SSE with exponential backoff ──────────────────────────────────────────────
 let _sseDelay = 1000;
+let _sseWatchdog;
 function connectSSE() {
   const connEl = document.getElementById('conn');
   const es = new EventSource('/events?token=' + (window._MFCLIVE_TOKEN || ''));
+  function resetWatchdog() {
+    clearTimeout(_sseWatchdog);
+    _sseWatchdog = setTimeout(() => { es.close(); connectSSE(); }, 10000);
+  }
   es.onopen = () => {
     _sseDelay = 1000;
     connEl.textContent = 'connected ✓';
+    resetWatchdog();
   };
   es.onerror = () => {
+    clearTimeout(_sseWatchdog);
     es.close();
     connEl.textContent = `reconnecting in ${Math.round(_sseDelay / 1000)}s…`;
     setTimeout(connectSSE, _sseDelay);
     _sseDelay = Math.min(_sseDelay * 2, 30000);
   };
   es.onmessage = e => {
-  const d = JSON.parse(e.data);
+  resetWatchdog();
+  let d;
+  try { d = JSON.parse(e.data); } catch (err) { console.error('[sse] parse error:', err.message); return; }
   if (d.type !== 'state') return;
   gameState = d;
   localMs = d.timerMs;
@@ -504,11 +541,27 @@ function connectSSE() {
   // Overlay visibility panel
   renderOverlays(d.overlayVisible);
 
-  // Sync YouTube preview URL from server if input isn't being edited
-  const ytInput = document.getElementById('ytUrl');
-  if (typeof d.ytUrl === 'string' && d.ytUrl !== ytInput.value && document.activeElement !== ytInput) {
-    ytInput.value = d.ytUrl;
-    updateYT();
+  // Restore banner — shown once if server recovered a mid-game snapshot
+  if (d.wasRestored && !_restoreBannerShown) {
+    _restoreBannerShown = true;
+    document.getElementById('restoreBannerText').textContent =
+      'Game state restored — ' + d.homeTeam + ' ' + d.homeScore + '–' + d.awayScore + ' ' + d.awayTeam;
+    document.getElementById('restoreBanner').classList.add('show');
+  }
+
+  // Sync kickoff time from server state (only if field is not focused)
+  const kickoffEl = document.getElementById('kickoffInput');
+  if (d.kickoffTime && document.activeElement !== kickoffEl) {
+    kickoffEl.value = d.kickoffTime;
+  }
+
+  // Sync YouTube URL from server (source of truth for all clients)
+  if (d.ytUrl !== undefined) {
+    const ytInput = document.getElementById('ytUrl');
+    if (ytInput.value !== d.ytUrl) {
+      ytInput.value = d.ytUrl;
+      updateYT(true);
+    }
   }
 
   // Refresh logos
@@ -518,6 +571,25 @@ function connectSSE() {
   };
 }
 connectSSE();
+
+// ── Restore banner ────────────────────────────────────────────────────────────
+function dismissRestoreBanner() {
+  document.getElementById('restoreBanner').classList.remove('show');
+}
+
+// ── Kickoff time ──────────────────────────────────────────────────────────────
+function setKickoff() {
+  const val = document.getElementById('kickoffInput').value; // "HH:MM" or ""
+  act('set_kickoff', { time: val });
+  toast(val ? 'Kickoff set to ' + val : 'Kickoff time cleared');
+}
+
+// ── New game reset ────────────────────────────────────────────────────────────
+function confirmNewGame() {
+  if (!confirm('Reset for a new game?\n\nThis will clear the score, timer, fouls, and penalties.\nTeam names and lineups will be kept.')) return;
+  act('reset_game');
+  toast('Game reset ✓');
+}
 
 // Reset confirmation + undo
 let preResetMs = null;
@@ -689,8 +761,9 @@ function setLTTeam(side) {
 }
 
 function showLT() {
-  const l1 = document.getElementById('ltLine1').value.trim();
-  const l2 = document.getElementById('ltLine2').value.trim();
+  const sanitise = s => s.trim().slice(0, 100).replace(/[\x00-\x1F\x7F]/g, '');
+  const l1 = sanitise(document.getElementById('ltLine1').value);
+  const l2 = sanitise(document.getElementById('ltLine2').value);
   if (!l1) { toast('Enter a name first'); return; }
   act('lower_show', {line1:l1, line2:l2, team: ltTeamSide, event: ltEventType});
   if (ltEventType === 'redcard') {
@@ -700,6 +773,8 @@ function showLT() {
   } else {
     toast('Lower third shown');
   }
+  document.getElementById('ltLine1').value = '';
+  document.getElementById('ltLine2').value = '';
   clearTimeout(ltHideTimer);
   const dur = parseInt(document.getElementById('ltDuration').value);
   if (dur > 0) ltHideTimer = setTimeout(() => act('lower_hide'), dur * 1000);
@@ -776,7 +851,7 @@ function parseYTId(val) {
   return null;
 }
 
-function updateYT() {
+function updateYT(fromServer) {
   const val = document.getElementById('ytUrl').value;
   const id  = parseYTId(val);
   const wrap  = document.getElementById('ytWrap');
@@ -784,12 +859,11 @@ function updateYT() {
   if (id) {
     frame.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&mute=1';
     wrap.style.display = '';
-    localStorage.setItem('mfclive_yt', val);
-    if (!_ytLocalRestore) act('set_yt_url', { url: val });
+    if (!fromServer) act('set_yt_url', { url: val });
   } else {
     frame.src = '';
     wrap.style.display = 'none';
-    if (!val.trim() && !_ytLocalRestore) act('set_yt_url', { url: '' });
+    if (!fromServer) act('set_yt_url', { url: '' });
   }
 }
 
@@ -802,19 +876,12 @@ function toggleYT() {
   localStorage.setItem('mfclive_yt_open', open ? '1' : '0');
 }
 
-// Restore saved state on load
-// _ytLocalRestore flag prevents the initial localStorage restore from overwriting
-// the server's shared ytUrl before SSE connects and provides the authoritative value.
-let _ytLocalRestore = true;
+// Restore panel open/close state on load (URL comes from server via SSE)
 (function () {
-  const saved = localStorage.getItem('mfclive_yt');
-  if (saved) document.getElementById('ytUrl').value = saved;
   if (localStorage.getItem('mfclive_yt_open') === '1') {
     document.getElementById('ytBody').style.display = '';
     document.getElementById('ytChevron').textContent = '▲ hide';
-    if (saved) updateYT();
   }
-  _ytLocalRestore = false;
 })();
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────────
