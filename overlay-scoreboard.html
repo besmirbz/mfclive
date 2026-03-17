@@ -210,7 +210,7 @@ function renderRedCard(cellId, timerId, cards) {
   if (cards&&cards.length>0) { timerEl.textContent=fmt(cards[0].remainingMs); cell.classList.add('active'); }
   else { cell.classList.remove('active'); timerEl.textContent=''; }
 }
-let prevHome=0, prevAway=0;
+let prevHome=null, prevAway=null;
 let _sseDelay=1000;
 function connectSSE(){
   const es=new EventSource('/events');

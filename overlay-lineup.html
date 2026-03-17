@@ -212,6 +212,7 @@
 
   </div>
 </div>
+<script src="/audio-util.js"></script>
 <script>
 function parsePlayer(p) {
   const cap = p.includes('(C)');
@@ -250,7 +251,10 @@ function renderList(ulId, starters, subs, subsLabel) {
   return rows;
 }
 
+let _logoColCount = -1;
 function syncLogoColFiller(count) {
+  if (count === _logoColCount) return;
+  _logoColCount = count;
   const logocol = document.getElementById('logoCol');
   logocol.querySelectorAll('.player-row-filler').forEach(el => el.remove());
   for (let i = 0; i < count; i++) {
@@ -260,21 +264,6 @@ function syncLogoColFiller(count) {
   }
 }
 
-// ── Audio ─────────────────────────────────────────────────────────────────────
-function fadeAudio(audio, toVol, durationMs) {
-  clearInterval(audio._fadeTimer);
-  const steps = Math.max(1, Math.round(durationMs / 16));
-  const fromVol = audio.volume;
-  let step = 0;
-  audio._fadeTimer = setInterval(() => {
-    step++;
-    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
-    if (step >= steps) {
-      clearInterval(audio._fadeTimer);
-      if (toVol === 0) audio.pause();
-    }
-  }, durationMs / steps);
-}
 const fanfareAudio    = new Audio('/audio/lineup-fanfare.mp3');
 fanfareAudio.volume   = 0;
 let wasLineupVisible  = false;
@@ -314,8 +303,7 @@ function connectSSE() {
   if (ovVisible && !wasLineupVisible) {
     fanfareAudio.currentTime = 0;
     fanfareAudio.volume = 0;
-    fanfareAudio.play().catch(() => {});
-    fadeAudio(fanfareAudio, 0.8, 400);
+    fanfareAudio.play().then(() => fadeAudio(fanfareAudio, 0.8, 400)).catch(() => {});
   } else if (!ovVisible && wasLineupVisible) {
     fadeAudio(fanfareAudio, 0, 600);
   }

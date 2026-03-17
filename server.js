@@ -32,12 +32,17 @@ function getLocalIP() {
 // Generated once; delete the file to rotate.
 const TOKEN_FILE = path.join(os.homedir(), '.mfclive', 'token.txt');
 let SECRET;
-if (fs.existsSync(TOKEN_FILE)) {
-  SECRET = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
-} else {
-  fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
+try {
+  if (fs.existsSync(TOKEN_FILE)) {
+    SECRET = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+  } else {
+    fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
+    SECRET = crypto.randomBytes(6).toString('hex');
+    fs.writeFileSync(TOKEN_FILE, SECRET, 'utf8');
+  }
+} catch (e) {
+  console.warn('[token] Could not read/write token file — using in-memory token only:', e.message);
   SECRET = crypto.randomBytes(6).toString('hex');
-  fs.writeFileSync(TOKEN_FILE, SECRET, 'utf8');
 }
 
 // Requests from localhost are always allowed (Streamlabs browser sources).
@@ -99,6 +104,72 @@ const state = {
   },
 };
 
+// ── State persistence ──────────────────────────────────────────────────────────
+// Saves game state to ~/.mfclive/state.json after every action so a server
+// restart mid-match can recover scores, timer, fouls, lineups, etc.
+const STATE_FILE = path.join(os.homedir(), '.mfclive', 'state.json');
+
+function saveState() {
+  const snapshot = {
+    homeTeam: state.homeTeam, awayTeam: state.awayTeam,
+    homeLogo: state.homeLogo, awayLogo: state.awayLogo,
+    homeScore: state.homeScore, awayScore: state.awayScore,
+    period: state.period, halfTime: state.halfTime,
+    timerMs: state.timerRunning ? getElapsed() : state.timerMs,
+    homeFouls: state.homeFouls, awayFouls: state.awayFouls,
+    redCards: state.redCards.map(rc => ({ ...rc, startedAt: null })),
+    lowerThird: { ...state.lowerThird, visible: false },
+    lineup: state.lineup,
+    overlayVisible: state.overlayVisible,
+    arena: state.arena, league: state.league,
+    _homePlayers: state._homePlayers || [], _homeStarters: state._homeStarters || [],
+    _homeSubs: state._homeSubs || [],       _homeSepLabel: state._homeSepLabel || 'Substitutes',
+    _awayPlayers: state._awayPlayers || [], _awayStarters: state._awayStarters || [],
+    _awaySubs: state._awaySubs || [],       _awaySepLabel: state._awaySepLabel || 'Substitutes',
+  };
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify(snapshot), 'utf8'); } catch { /* non-fatal */ }
+}
+
+function restoreState() {
+  try {
+    if (!fs.existsSync(STATE_FILE)) return;
+    const snap = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    Object.assign(state, {
+      homeTeam:  snap.homeTeam  || state.homeTeam,
+      awayTeam:  snap.awayTeam  || state.awayTeam,
+      homeLogo:  snap.homeLogo  || '',
+      awayLogo:  snap.awayLogo  || '',
+      homeScore: snap.homeScore ?? state.homeScore,
+      awayScore: snap.awayScore ?? state.awayScore,
+      period:    snap.period    ?? state.period,
+      halfTime:  snap.halfTime  ?? state.halfTime,
+      timerMs:   snap.timerMs   ?? state.timerMs,
+      timerRunning: false, // always start paused
+      homeFouls: snap.homeFouls ?? state.homeFouls,
+      awayFouls: snap.awayFouls ?? state.awayFouls,
+      redCards:  (snap.redCards || []),
+      lowerThird: snap.lowerThird || state.lowerThird,
+      lineup:    snap.lineup    || state.lineup,
+      overlayVisible: snap.overlayVisible || state.overlayVisible,
+      arena:     snap.arena  || '',
+      league:    snap.league || '',
+      _homePlayers:  snap._homePlayers  || [],
+      _homeStarters: snap._homeStarters || [],
+      _homeSubs:     snap._homeSubs     || [],
+      _homeSepLabel: snap._homeSepLabel || 'Substitutes',
+      _awayPlayers:  snap._awayPlayers  || [],
+      _awayStarters: snap._awayStarters || [],
+      _awaySubs:     snap._awaySubs     || [],
+      _awaySepLabel: snap._awaySepLabel || 'Substitutes',
+    });
+    console.log(`[state] Restored from snapshot — ${state.homeTeam} ${state.homeScore}–${state.awayScore} ${state.awayTeam}`);
+  } catch (e) {
+    console.warn('[state] Could not restore state:', e.message);
+  }
+}
+
+restoreState();
+
 // ── SSE clients ────────────────────────────────────────────────────────────────
 const clients = new Set();
 
@@ -154,7 +225,7 @@ function getPublicState() {
 
 // ── Tick every 500ms ───────────────────────────────────────────────────────────
 setInterval(() => {
-  if (!state.timerRunning) return;
+  if (!state.timerRunning || clients.size === 0) return;
 
   const now = Date.now();
 
@@ -286,7 +357,7 @@ function handleAction(action, payload) {
     }
 
     case 'lower_hide':
-      state.lowerThird = { visible: false, line1: '', line2: '' };
+      state.lowerThird = { visible: false, line1: '', line2: '', team: '', event: '' };
       break;
 
     case 'set_lineup': {
@@ -307,6 +378,7 @@ function handleAction(action, payload) {
       function lineupLineToPlayer(line) {
         const cap   = line.includes(' (C)');
         const clean = line.replace(' (C)', '').trim();
+        if (!clean.startsWith('#')) return null;
         const sp    = clean.indexOf(' ');
         const num   = sp > 0 ? (parseInt(clean.slice(1, sp)) || 0) : 0;
         const name  = sp > 0 ? clean.slice(sp + 1).trim() : clean.slice(1).trim();
@@ -348,6 +420,7 @@ function handleAction(action, payload) {
       break;
   }
   broadcast(getPublicState());
+  saveState();
 }
 
 // ── FOGIS roster processing ────────────────────────────────────────────────────
@@ -484,6 +557,9 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
 
   // ── Action API ──────────────────────────────────────────────────────────────
   if (req.method === 'POST' && route === '/action') {
+    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+      res.writeHead(415, { 'Content-Type': 'text/plain' }); res.end('Unsupported Media Type'); return;
+    }
     let body = '';
     req.on('data', d => { body += d; if (body.length > 8192) { res.writeHead(413); res.end('Too large'); req.destroy(); } });
     req.on('end', () => {
@@ -557,7 +633,9 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     '/lineup':        'overlay-lineup.html',
     '/brb':           'overlay-brb.html',
     '/startingsoon':  'overlay-startingsoon.html',
+    '/audio-util.js': 'audio-util.js',
   };
+  const jsFiles = new Set(['audio-util.js']);
   const file = fileMap[route];
   if (file) {
     const fp = path.join(__dirname, file);
@@ -567,10 +645,11 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       if (file === 'controller.html' || file === 'bookmarklet.html') {
         html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};</script>\n</head>`);
       }
-      res.writeHead(200, { 'Content-Type': 'text/html' });
+      const ct = jsFiles.has(file) ? 'application/javascript' : 'text/html';
+      res.writeHead(200, { 'Content-Type': ct });
       res.end(html);
     } else {
-      res.writeHead(404); res.end('File not found: ' + file);
+      res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('File not found: ' + esc(file));
     }
     return;
   }
@@ -601,14 +680,15 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     const logoUrl = route === '/logo/home' ? state.homeLogo : state.awayLogo;
     if (!logoUrl) { res.writeHead(404); res.end('No logo set'); return; }
     if (!isSafeLogoUrl(logoUrl)) { res.writeHead(400); res.end('Invalid logo URL'); return; }
-    const logoReq = https.get(logoUrl, logoRes => {
+    const logoReq = https.get(logoUrl, { timeout: 5000 }, logoRes => {
       res.writeHead(200, {
         'Content-Type':  logoRes.headers['content-type'] || 'image/png',
         'Cache-Control': 'public, max-age=3600',
       });
       logoRes.pipe(res);
     });
-    logoReq.on('error', () => { res.writeHead(502); res.end('Logo fetch failed'); });
+    logoReq.on('timeout', () => { logoReq.destroy(); res.writeHead(504); res.end('Logo fetch timed out'); });
+    logoReq.on('error', () => { if (!res.headersSent) { res.writeHead(502); res.end('Logo fetch failed'); } });
     return;
   }
 
@@ -622,7 +702,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' });
       fs.createReadStream(fp).pipe(res);
     } else {
-      res.writeHead(404); res.end('Audio file not found: ' + filename);
+      res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Audio file not found: ' + esc(filename));
     }
     return;
   }

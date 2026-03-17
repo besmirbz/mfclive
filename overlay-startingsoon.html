@@ -3,8 +3,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600&display=swap');
 
   * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -389,6 +391,7 @@
 
   <div class="credit">© 2025 Besmir Pepa</div>
 
+<script src="/audio-util.js"></script>
 <script>
 // ── Parse kickoff time from URL query param ──────────────────────────────────
 // Usage: http://localhost:3000/startingsoon?kickoff=14:30
@@ -401,7 +404,7 @@ function getKickoffDate() {
   const d = new Date();
   d.setHours(h, m, 0, 0);
   // If the time is already in the past today, assume tomorrow
-  if (d <= new Date()) d.setDate(d.getDate() + 1);
+  if (d < new Date()) d.setDate(d.getDate() + 1);
   return d;
 }
 
@@ -456,21 +459,6 @@ if (!kickoff) {
   setInterval(tick, 1000);
 }
 
-// ── Audio ─────────────────────────────────────────────────────────────────────
-function fadeAudio(audio, toVol, durationMs) {
-  clearInterval(audio._fadeTimer);
-  const steps = Math.max(1, Math.round(durationMs / 16));
-  const fromVol = audio.volume;
-  let step = 0;
-  audio._fadeTimer = setInterval(() => {
-    step++;
-    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
-    if (step >= steps) {
-      clearInterval(audio._fadeTimer);
-      if (toVol === 0) audio.pause();
-    }
-  }, durationMs / steps);
-}
 const bgAudio = new Audio('/audio/startingsoon-loop.mp3');
 bgAudio.loop   = true;
 bgAudio.volume = 0;

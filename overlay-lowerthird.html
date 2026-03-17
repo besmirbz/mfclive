@@ -169,6 +169,7 @@
   <div class="lt-rcicon" id="ltRcIcon"></div>
 </div>
 <div class="lt-foot" id="ltFoot"></div>
+<script src="/audio-util.js"></script>
 <script>
 const THEMES = {
   goal:    { color: '#3D82F6', bg: 'rgba(61,130,246,0.88)',  line2: '#7DB8F7' },
@@ -264,21 +265,6 @@ function triggerRedCardFx() {
   setTimeout(() => ltEl.classList.remove('pulse-red'), 1100);
 }
 
-// ── Audio ─────────────────────────────────────────────────────────────────────
-function fadeAudio(audio, toVol, durationMs) {
-  clearInterval(audio._fadeTimer);
-  const steps = Math.max(1, Math.round(durationMs / 16));
-  const fromVol = audio.volume;
-  let step = 0;
-  audio._fadeTimer = setInterval(() => {
-    step++;
-    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
-    if (step >= steps) {
-      clearInterval(audio._fadeTimer);
-      if (toVol === 0) audio.pause();
-    }
-  }, durationMs / steps);
-}
 const goalAudio = new Audio('/audio/goal.mp3');
 const rcAudio   = new Audio('/audio/redcard-whistle.mp3');
 goalAudio.volume = 0;
@@ -288,9 +274,10 @@ rcAudio.volume   = 0;
 let wasVisible = false;
 
 let _sseDelay = 1000;
+let _isInitialSync = false;
 function connectSSE() {
   const es = new EventSource('/events');
-  es.onopen  = () => { _sseDelay = 1000; };
+  es.onopen  = () => { _sseDelay = 1000; _isInitialSync = true; };
   es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
   es.onmessage = e => {
   const d = JSON.parse(e.data);
@@ -325,7 +312,7 @@ function connectSSE() {
     lt.classList.add('visible');
     foot.classList.add('visible');
 
-    if (!wasVisible) {
+    if (!wasVisible && !_isInitialSync) {
       const ev = d.lowerThird.event;
       // Immediate flashes (no position dependency)
       if (ev === 'goal') {
@@ -361,6 +348,7 @@ function connectSSE() {
     fadeAudio(rcAudio,   0, 500);
     wasVisible = false;
   }
+  _isInitialSync = false;
   };
 }
 connectSSE();

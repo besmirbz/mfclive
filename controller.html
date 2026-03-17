@@ -108,7 +108,7 @@ textarea:focus{outline:none;border-color:var(--blue);}
 </head>
 <body>
 <header>
-  <img id="homeLogoImg" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+  <img id="homeLogoImgHeader" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
   <h1>MFCLIVE</h1>
   <p style="font-size:9px;color:rgba(125,184,247,.3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px;">© 2025 Besmir Pepa</p>
   <span class="conn" id="conn">connecting…</span>
@@ -332,6 +332,8 @@ let localMs = 20*60*1000;
 let localRunning = false;
 let tickInterval;
 let prevRosterKey = ''; // tracks last known roster fingerprint to detect fresh imports
+let _prevHomePlayerBtnKey = '';
+let _prevAwayPlayerBtnKey = '';
 
 function fmt(ms) {
   const s = Math.ceil(Math.max(0, ms) / 1000);
@@ -457,16 +459,24 @@ function connectSSE() {
   if (!hnEl.dataset.manual) hnEl.value = d.homeTeam || '';
   if (!anEl.dataset.manual) anEl.value = d.awayTeam || '';
 
-  // Build player quick-pick buttons when roster is loaded
+  // Build player quick-pick buttons only when roster or team name changes
   if (d.homePlayers && d.homePlayers.length) {
-    buildPlayerBtns('homePlayerBtns', d.homePlayers, 'home', d.homeTeam);
-    document.getElementById('homePickLbl').textContent = d.homeTeam;
-    document.getElementById('playerPicks').style.display = 'block';
+    const homeKey = d.homeTeam + '|' + d.homePlayers.map(p => p.num + ':' + p.name).join('|');
+    if (homeKey !== _prevHomePlayerBtnKey) {
+      _prevHomePlayerBtnKey = homeKey;
+      buildPlayerBtns('homePlayerBtns', d.homePlayers, 'home', d.homeTeam);
+      document.getElementById('homePickLbl').textContent = d.homeTeam;
+      document.getElementById('playerPicks').style.display = 'block';
+    }
   }
   if (d.awayPlayers && d.awayPlayers.length) {
-    buildPlayerBtns('awayPlayerBtns', d.awayPlayers, 'away', d.awayTeam);
-    document.getElementById('awayPickLbl').textContent = d.awayTeam;
-    document.getElementById('playerPicks').style.display = 'block';
+    const awayKey = d.awayTeam + '|' + d.awayPlayers.map(p => p.num + ':' + p.name).join('|');
+    if (awayKey !== _prevAwayPlayerBtnKey) {
+      _prevAwayPlayerBtnKey = awayKey;
+      buildPlayerBtns('awayPlayerBtns', d.awayPlayers, 'away', d.awayTeam);
+      document.getElementById('awayPickLbl').textContent = d.awayTeam;
+      document.getElementById('playerPicks').style.display = 'block';
+    }
   }
 
   // Overlay visibility panel
@@ -474,7 +484,7 @@ function connectSSE() {
 
   // Refresh logos
   const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
-  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();}
+  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();const hh=document.getElementById('homeLogoImgHeader');if(hh)hh.src='/logo/home?t='+Date.now();}
   if(d.awayLogo&&al&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();}
   };
 }
@@ -655,7 +665,8 @@ function showLT() {
   if (!l1) { toast('Enter a name first'); return; }
   act('lower_show', {line1:l1, line2:l2, team: ltTeamSide, event: ltEventType});
   if (ltEventType === 'redcard') {
-    act('red_card_add', { team: ltTeamSide || 'home', player: l1 });
+    if (!ltTeamSide) { toast('Select Home or Away before adding a red card'); return; }
+    act('red_card_add', { team: ltTeamSide, player: l1 });
     toast('Red card shown + 2-min penalty started');
   } else {
     toast('Lower third shown');
@@ -680,8 +691,12 @@ const OVERLAYS = [
   { name: 'brb',          icon: '☕', label: 'BRB'          },
 ];
 
+let _lastOverlayState = '';
 function renderOverlays(visible) {
   if (!visible) return;
+  const sig = JSON.stringify(visible);
+  if (sig === _lastOverlayState) return;
+  _lastOverlayState = sig;
   const container = document.getElementById('ovRows');
   container.innerHTML = OVERLAYS.map(ov => {
     const live = visible[ov.name] !== false;
