@@ -104,6 +104,13 @@ textarea:focus{outline:none;border-color:var(--blue);}
 /* Toast */
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--blue);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;transition:transform .3s;pointer-events:none;z-index:999;}
 .toast.show{transform:translateX(-50%) translateY(0);}
+
+/* YT preview */
+.yt-toggle-hdr{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
+.yt-toggle-hdr:active{opacity:.7;}
+.yt-chevron{font-size:11px;color:rgba(125,184,247,.45);letter-spacing:.05em;}
+.yt-wrap{position:relative;width:100%;padding-bottom:56.25%;background:#000;border-radius:7px;overflow:hidden;}
+.yt-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
 </style>
 </head>
 <body>
@@ -321,6 +328,21 @@ textarea:focus{outline:none;border-color:var(--blue);}
   <div style="display:flex;gap:7px;">
     <button class="btn btn-blue" onclick="saveLineup()" style="flex:1">Save & Push to Overlay</button>
     <button class="btn btn-gray btn-small" id="resyncLineupBtn" onclick="resyncLineup()" title="Clear manual edits and re-sync from server roster">↺ Re-sync</button>
+  </div>
+</div>
+
+<!-- YT STREAM PREVIEW -->
+<div class="card">
+  <div class="card-title yt-toggle-hdr" onclick="toggleYT()">
+    <span>📺 Stream Preview</span>
+    <span class="yt-chevron" id="ytChevron">▼ show</span>
+  </div>
+  <div id="ytBody" style="display:none">
+    <input type="text" id="ytUrl" placeholder="Paste YouTube URL or video ID" style="margin-bottom:8px;" oninput="updateYT()" />
+    <div class="yt-wrap" id="ytWrap" style="display:none">
+      <iframe id="ytFrame" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+    </div>
+    <p style="font-size:10px;color:rgba(125,184,247,.3);margin-top:6px;line-height:1.5;">Muted by default — use the player's unmute button to hear audio.</p>
   </div>
 </div>
 
@@ -736,7 +758,53 @@ function toast(msg) {
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
-// Keyboard shortcuts
+// ── YouTube stream preview ─────────────────────────────────────────────────────
+function parseYTId(val) {
+  val = (val || '').trim();
+  let m = val.match(/youtu\.be\/([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  m = val.match(/[?&/](?:v=|live\/|embed\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(val)) return val;
+  return null;
+}
+
+function updateYT() {
+  const val = document.getElementById('ytUrl').value;
+  const id  = parseYTId(val);
+  const wrap  = document.getElementById('ytWrap');
+  const frame = document.getElementById('ytFrame');
+  if (id) {
+    frame.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&mute=1';
+    wrap.style.display = '';
+    localStorage.setItem('mfclive_yt', val);
+  } else {
+    frame.src = '';
+    wrap.style.display = 'none';
+  }
+}
+
+function toggleYT() {
+  const body = document.getElementById('ytBody');
+  const chevron = document.getElementById('ytChevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  chevron.textContent = open ? '▲ hide' : '▼ show';
+  localStorage.setItem('mfclive_yt_open', open ? '1' : '0');
+}
+
+// Restore saved state on load
+(function () {
+  const saved = localStorage.getItem('mfclive_yt');
+  if (saved) document.getElementById('ytUrl').value = saved;
+  if (localStorage.getItem('mfclive_yt_open') === '1') {
+    document.getElementById('ytBody').style.display = '';
+    document.getElementById('ytChevron').textContent = '▲ hide';
+    if (saved) updateYT();
+  }
+})();
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
   if (e.code==='Space') { e.preventDefault(); act(localRunning?'timer_stop':'timer_start'); }
