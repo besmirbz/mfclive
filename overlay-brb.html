@@ -278,12 +278,18 @@
   <div class="credit">© 2025 Besmir Pepa</div>
 
 <script>
-const es = new EventSource('/events');
-es.onmessage = e => {
-  const d = JSON.parse(e.data);
-  if (d.type !== 'state') return;
-  document.body.classList.toggle('ov-hidden', d.overlayVisible?.brb === false);
-};
+let _sseDelay = 1000;
+function connectSSE() {
+  const es = new EventSource('/events');
+  es.onopen  = () => { _sseDelay = 1000; };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
+  es.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type !== 'state') return;
+    document.body.classList.toggle('ov-hidden', d.overlayVisible?.brb === false);
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>

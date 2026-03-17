@@ -211,8 +211,12 @@ function renderRedCard(cellId, timerId, cards) {
   else { cell.classList.remove('active'); timerEl.textContent=''; }
 }
 let prevHome=0, prevAway=0;
-const es=new EventSource('/events');
-es.onmessage=e=>{
+let _sseDelay=1000;
+function connectSSE(){
+  const es=new EventSource('/events');
+  es.onopen =()=>{ _sseDelay=1000; };
+  es.onerror=()=>{ es.close(); setTimeout(connectSSE,_sseDelay); _sseDelay=Math.min(_sseDelay*2,30000); };
+  es.onmessage=e=>{
   const d=JSON.parse(e.data);
   if(d.type!=='state') return;
   document.getElementById('homeName').textContent=d.homeTeam;
@@ -245,7 +249,9 @@ es.onmessage=e=>{
   const ovVisible = d.overlayVisible?.scoreboard !== false;
   if (ovVisible) { sb.classList.add('ready'); sb.classList.remove('ov-hidden'); }
   else           { sb.classList.add('ov-hidden'); }
-};
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>

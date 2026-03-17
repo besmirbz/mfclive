@@ -397,10 +397,22 @@ function renderRedCards(cards, homeName, awayName) {
   }).join('');
 }
 
-const es = new EventSource('/events?token=' + (window._MFCLIVE_TOKEN || ''));
-es.onopen  = () => document.getElementById('conn').textContent = 'connected ✓';
-es.onerror = () => document.getElementById('conn').textContent = 'reconnecting…';
-es.onmessage = e => {
+// ── SSE with exponential backoff ──────────────────────────────────────────────
+let _sseDelay = 1000;
+function connectSSE() {
+  const connEl = document.getElementById('conn');
+  const es = new EventSource('/events?token=' + (window._MFCLIVE_TOKEN || ''));
+  es.onopen = () => {
+    _sseDelay = 1000;
+    connEl.textContent = 'connected ✓';
+  };
+  es.onerror = () => {
+    es.close();
+    connEl.textContent = `reconnecting in ${Math.round(_sseDelay / 1000)}s…`;
+    setTimeout(connectSSE, _sseDelay);
+    _sseDelay = Math.min(_sseDelay * 2, 30000);
+  };
+  es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type !== 'state') return;
   gameState = d;
@@ -464,7 +476,9 @@ es.onmessage = e => {
   const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
   if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();}
   if(d.awayLogo&&al&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();}
-};
+  };
+}
+connectSSE();
 
 // Reset confirmation + undo
 let preResetMs = null;

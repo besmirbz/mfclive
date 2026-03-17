@@ -158,19 +158,22 @@ setInterval(() => {
 
   const now = Date.now();
 
-  // Decrement red card timers first, then discard any that have reached zero
+  // Auto-stop timer first — if the game clock has expired, stop and broadcast,
+  // but do NOT decrement red cards (timer was already at 0).
+  const remaining = getElapsed();
+  if (remaining <= 0) {
+    state.timerMs      = 0;
+    state.timerRunning = false;
+    broadcast(getPublicState());
+    return;
+  }
+
+  // Decrement red card timers only while the game clock is still running
   state.redCards.forEach(rc => {
     rc.remainingMs = Math.max(0, rc.remainingMs - (now - rc.startedAt));
     rc.startedAt = now;
   });
   state.redCards = state.redCards.filter(rc => rc.remainingMs > 0);
-
-  // Auto-stop timer at 00:00
-  const remaining = getElapsed();
-  if (remaining <= 0) {
-    state.timerMs      = 0;
-    state.timerRunning = false;
-  }
 
   broadcast(getPublicState());
 }, 500);
@@ -180,11 +183,12 @@ function handleAction(action, payload) {
   switch (action) {
     case 'timer_start':
       if (!state.timerRunning && state.timerMs > 0) {
+        const startNow     = Date.now();
         state.timerBaseMs  = state.timerMs;
-        state.timerStart   = Date.now();
+        state.timerStart   = startNow;
         state.timerRunning = true;
-        // Also refresh red card startedAt so they tick correctly
-        state.redCards.forEach(rc => rc.startedAt = Date.now());
+        // Use the same timestamp for red cards so there's no drift on first tick
+        state.redCards.forEach(rc => rc.startedAt = startNow);
       }
       break;
 
@@ -561,7 +565,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject the session token into pages that need it
       if (file === 'controller.html' || file === 'bookmarklet.html') {
-        html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN="${SECRET}";</script>\n</head>`);
+        html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};</script>\n</head>`);
       }
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(html);
@@ -577,12 +581,18 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     try {
       const u = new URL(raw);
       if (u.protocol !== 'https:') return false;
-      const h = u.hostname;
-      if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return false;
-      if (/^10\./.test(h))                                         return false;
-      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h))                   return false;
-      if (/^192\.168\./.test(h))                                   return false;
-      if (/^169\.254\./.test(h))                                   return false; // link-local / AWS metadata
+      const h = u.hostname.toLowerCase();
+      if (h === 'localhost') return false;
+      // Reject any IPv6 address (always bracketed by URL parser, e.g. [::1])
+      if (h.startsWith('[')) return false;
+      // Reject all private / reserved IPv4 ranges
+      if (/^127\./.test(h))                                         return false; // full loopback range
+      if (/^0\./.test(h) || h === '0.0.0.0')                       return false; // any 0.x.x.x + 0.0.0.0
+      if (/^10\./.test(h))                                          return false; // RFC 1918
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h))                    return false; // RFC 1918
+      if (/^192\.168\./.test(h))                                    return false; // RFC 1918
+      if (/^169\.254\./.test(h))                                    return false; // link-local / AWS metadata
+      if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h))     return false; // CGNAT / Tailscale
       return true;
     } catch { return false; }
   }

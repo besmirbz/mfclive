@@ -477,8 +477,12 @@ bgAudio.volume = 0;
 let wasStartingSoon = false;
 
 // ── SSE — pull team names, logos, league, arena from server state ────────────
-const es = new EventSource('/events');
-es.onmessage = e => {
+let _sseDelay = 1000;
+function connectSSE() {
+  const es = new EventSource('/events');
+  es.onopen  = () => { _sseDelay = 1000; };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
+  es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type !== 'state') return;
 
@@ -525,7 +529,9 @@ es.onmessage = e => {
     fadeAudio(bgAudio, 0, 600);
   }
   wasStartingSoon = nowVisible;
-};
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>

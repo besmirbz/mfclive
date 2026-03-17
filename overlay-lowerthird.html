@@ -287,8 +287,12 @@ rcAudio.volume   = 0;
 // ── SSE ────────────────────────────────────────────────────────────────────────
 let wasVisible = false;
 
-const es = new EventSource('/events');
-es.onmessage = e => {
+let _sseDelay = 1000;
+function connectSSE() {
+  const es = new EventSource('/events');
+  es.onopen  = () => { _sseDelay = 1000; };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
+  es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type !== 'state') return;
   const lt   = document.getElementById('lt');
@@ -306,9 +310,13 @@ es.onmessage = e => {
     const logo  = document.getElementById('ltTeamLogo');
     const tname = document.getElementById('ltTeamName');
     if (team === 'home' || team === 'away') {
-      logo.src = '/logo/' + team;
+      if (logo.dataset.team !== team) {
+        logo.dataset.team = team;
+        logo.src = '/logo/' + team;
+      }
       tname.textContent = team === 'home' ? (d.homeTeam || '') : (d.awayTeam || '');
     } else {
+      logo.dataset.team = '';
       logo.src = '';
       tname.textContent = '';
     }
@@ -353,7 +361,9 @@ es.onmessage = e => {
     fadeAudio(rcAudio,   0, 500);
     wasVisible = false;
   }
-};
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>
