@@ -102,6 +102,8 @@ const state = {
     startingsoon: false,
     brb:          false,
   },
+  // YouTube stream preview URL (shared across all controller clients)
+  ytUrl: '',
 };
 
 // ── State persistence ──────────────────────────────────────────────────────────
@@ -210,6 +212,7 @@ function getPublicState() {
     lowerThird:      state.lowerThird,
     lineup:          state.lineup,
     overlayVisible:  state.overlayVisible,
+    ytUrl:           state.ytUrl,
     arena:           state.arena,
     league:       state.league,
     homePlayers:  state._homePlayers || [],
@@ -414,6 +417,9 @@ function handleAction(action, payload) {
       }
       break;
     }
+    case 'set_yt_url':
+      state.ytUrl = (typeof payload.url === 'string') ? payload.url.slice(0, 200) : '';
+      break;
     case 'timer_set':
       state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;

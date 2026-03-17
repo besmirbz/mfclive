@@ -504,6 +504,13 @@ function connectSSE() {
   // Overlay visibility panel
   renderOverlays(d.overlayVisible);
 
+  // Sync YouTube preview URL from server if input isn't being edited
+  const ytInput = document.getElementById('ytUrl');
+  if (typeof d.ytUrl === 'string' && d.ytUrl !== ytInput.value && document.activeElement !== ytInput) {
+    ytInput.value = d.ytUrl;
+    updateYT();
+  }
+
   // Refresh logos
   const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
   if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();const hh=document.getElementById('homeLogoImgHeader');if(hh)hh.src='/logo/home?t='+Date.now();}
@@ -778,9 +785,11 @@ function updateYT() {
     frame.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&mute=1';
     wrap.style.display = '';
     localStorage.setItem('mfclive_yt', val);
+    if (!_ytLocalRestore) act('set_yt_url', { url: val });
   } else {
     frame.src = '';
     wrap.style.display = 'none';
+    if (!val.trim() && !_ytLocalRestore) act('set_yt_url', { url: '' });
   }
 }
 
@@ -794,6 +803,9 @@ function toggleYT() {
 }
 
 // Restore saved state on load
+// _ytLocalRestore flag prevents the initial localStorage restore from overwriting
+// the server's shared ytUrl before SSE connects and provides the authoritative value.
+let _ytLocalRestore = true;
 (function () {
   const saved = localStorage.getItem('mfclive_yt');
   if (saved) document.getElementById('ytUrl').value = saved;
@@ -802,6 +814,7 @@ function toggleYT() {
     document.getElementById('ytChevron').textContent = '▲ hide';
     if (saved) updateYT();
   }
+  _ytLocalRestore = false;
 })();
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────────
