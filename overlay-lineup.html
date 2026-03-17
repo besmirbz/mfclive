@@ -15,9 +15,12 @@
     align-items: center;
     justify-content: center;
     opacity: 0;
-    transition: opacity 0.6s;
+    transform: scale(1);
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
   body.ready { opacity: 1; }
+  /* Overlay hidden — shrinks slightly and fades out */
+  body.ov-hidden { opacity: 0 !important; transform: scale(0.97); pointer-events: none; }
 
   /* Full-screen semi-transparent backdrop — no blur, just rgba */
   .backdrop {
@@ -227,7 +230,7 @@ function playerRow(p) {
   </li>`;
 }
 
-function renderList(ulId, starters, subs) {
+function renderList(ulId, starters, subs, subsLabel) {
   const ul = document.getElementById(ulId);
   if (!starters || !starters.length) { ul.innerHTML = ''; return 0; }
   let html = '';
@@ -239,7 +242,7 @@ function renderList(ulId, starters, subs) {
   }
   starters.forEach(p => { html += playerRow(p); rows++; });
   if (subs && subs.length) {
-    html += `<li class="section-lbl">Substitutes</li>`;
+    html += `<li class="section-lbl">${subsLabel || 'Substitutes'}</li>`;
     rows++;
     subs.forEach(p => { html += playerRow(p); rows++; });
   }
@@ -257,6 +260,25 @@ function syncLogoColFiller(count) {
   }
 }
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+function fadeAudio(audio, toVol, durationMs) {
+  clearInterval(audio._fadeTimer);
+  const steps = Math.max(1, Math.round(durationMs / 16));
+  const fromVol = audio.volume;
+  let step = 0;
+  audio._fadeTimer = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
+    if (step >= steps) {
+      clearInterval(audio._fadeTimer);
+      if (toVol === 0) audio.pause();
+    }
+  }, durationMs / steps);
+}
+const fanfareAudio    = new Audio('/audio/lineup-fanfare.mp3');
+fanfareAudio.volume   = 0;
+let wasLineupVisible  = false;
+
 const es = new EventSource('/events');
 es.onmessage = e => {
   const d = JSON.parse(e.data);
@@ -271,8 +293,8 @@ es.onmessage = e => {
   const awayStarters = d.awayStarters && d.awayStarters.length ? d.awayStarters : d.lineup.away;
   const awaySubs     = d.awayStarters && d.awayStarters.length ? (d.awaySubs || []) : [];
 
-  const homeRows = renderList('homeList', homeStarters, homeSubs);
-  const awayRows = renderList('awayList', awayStarters, awaySubs);
+  const homeRows = renderList('homeList', homeStarters, homeSubs, d.homeSepLabel);
+  const awayRows = renderList('awayList', awayStarters, awaySubs, d.awaySepLabel);
   syncLogoColFiller(Math.max(homeRows, awayRows));
 
   // Logo refresh
@@ -281,7 +303,19 @@ es.onmessage = e => {
   if (d.homeLogo && hl.dataset.src !== d.homeLogo) { hl.dataset.src=d.homeLogo; hl.src='/logo/home?t='+Date.now(); }
   if (d.awayLogo && al.dataset.src !== d.awayLogo) { al.dataset.src=d.awayLogo; al.src='/logo/away?t='+Date.now(); }
 
-  document.body.classList.add('ready');
+  const ovVisible = d.overlayVisible?.lineup !== false;
+  if (ovVisible) { document.body.classList.add('ready'); document.body.classList.remove('ov-hidden'); }
+  else           { document.body.classList.add('ov-hidden'); }
+
+  if (ovVisible && !wasLineupVisible) {
+    fanfareAudio.currentTime = 0;
+    fanfareAudio.volume = 0;
+    fanfareAudio.play().catch(() => {});
+    fadeAudio(fanfareAudio, 0.8, 400);
+  } else if (!ovVisible && wasLineupVisible) {
+    fadeAudio(fanfareAudio, 0, 600);
+  }
+  wasLineupVisible = ovVisible;
 };
 </script>
 </body>

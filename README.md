@@ -4,9 +4,26 @@ A live streaming overlay system for **Malmö Futsal Club**, built for use with S
 
 ---
 
+## Jump to your role
+
+### 🖥️ Stream Operator (admin)
+You set up and run the streaming PC, manage Streamlabs, and own the first-time setup.
+
+1. [First-Time Setup](#first-time-setup) — do this once before your first game
+2. [Every Game Day](#every-game-day) — your pre-match checklist
+3. [Troubleshooting](#troubleshooting) — if something breaks
+
+### 🎮 Controls Operator
+You run the controller on your phone during the game. You don't need to touch the PC.
+
+1. [Opening the Controller](#step-5--open-the-controller-on-your-phone) — get the URL from the stream operator
+2. [Using the Controller](#using-the-controller) — timer, score, lower thirds, overlays
+
+---
+
 ## Files Overview
 
-| File | Purpose |
+| File / Folder | Purpose |
 |---|---|
 | `server.js` | The backend — run this on the stream PC before every game |
 | `controller.html` | The control panel — open on your phone/tablet |
@@ -16,6 +33,7 @@ A live streaming overlay system for **Malmö Futsal Club**, built for use with S
 | `overlay-startingsoon.html` | Pre-match countdown overlay — add as Browser Source in Streamlabs |
 | `overlay-brb.html` | "We'll Be Right Back" overlay — add as Browser Source in Streamlabs |
 | `bookmarklet.html` | One-time setup page for the FOGIS roster loader |
+| `audio/` | Drop your royalty-free audio files here (see [Audio Setup](#4-audio-setup)) |
 
 All files must be kept in the **same folder** on the stream PC.
 
@@ -23,7 +41,7 @@ All files must be kept in the **same folder** on the stream PC.
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) installed on the stream PC (v18 or newer recommended)
+- [Node.js](https://nodejs.org/) installed on the stream PC (v14 or newer; v18+ recommended)
 - [Streamlabs](https://streamlabs.com/) for streaming
 - Google Chrome on the stream PC (for the bookmarklet)
 - A phone or tablet on the same Wi-Fi network as the stream PC
@@ -36,7 +54,9 @@ All files must be kept in the **same folder** on the stream PC.
 
 > **Swedish clubs only.** FOGIS (minfotboll.se) is the Swedish Football Federation's game management system. This step lets you load team rosters, logos, and venue info automatically with one click. If your club doesn't use FOGIS, skip this step — you can enter team names and lineups manually in the controller.
 
-1. Open `bookmarklet.html` in Chrome on the stream PC
+> ⚠️ **Important:** The bookmarklet setup page must be opened through the server, not by double-clicking the file. Start the server first (`npm start`), then open `http://localhost:3000/bookmarklet` in Chrome.
+
+1. Start the server (`npm start`) and open `http://localhost:3000/bookmarklet` in Chrome
 2. Press **Ctrl+Shift+B** to show the bookmarks bar
 3. Click **Copy to Clipboard**
 4. Right-click the bookmarks bar → **Add page** (or "Add bookmark")
@@ -87,7 +107,36 @@ Recommended settings regardless of encoder:
 | Keyframe interval | 2s |
 | Audio bitrate | 160 kbps AAC |
 
-For every Browser Source that is **not visible** in the current scene, right-click → Properties → tick **"Shutdown source when not visible"** to reduce GPU load.
+All five Browser Sources can live in a **single scene** — overlay visibility is now controlled from the controller (the 🎬 Overlays card), so you no longer need separate Streamlabs scenes for Starting Soon or BRB.
+
+For any Browser Source you never want running in the background, right-click → Properties → tick **"Shutdown source when not visible"** to reduce GPU load.
+
+### 4. Audio Setup
+
+The overlays play royalty-free audio effects that fade in and out in sync with the visual transitions:
+
+| Overlay | File to place in `audio/` | Effect |
+|---|---|---|
+| Starting Soon | `startingsoon-loop.mp3` | Loops while the overlay is visible, fades out on hide |
+| Lineup | `lineup-fanfare.mp3` | Plays once when the lineup overlay appears |
+| Lower Third — Goal | `goal.mp3` | Plays when a goal announcement is shown |
+| Lower Third — Red Card | `redcard-whistle.mp3` | Plays when a red card announcement is shown |
+
+**Recommended sources (royalty-free, free to download):**
+- [pixabay.com/music](https://pixabay.com/music/) — search "lofi chill ambient", "stadium fanfare", "crowd goal cheer", "referee whistle crowd"
+- [freesound.org](https://freesound.org/) — filter by CC0 licence
+
+Download your chosen files, rename them to match the filenames above, and drop them into the `audio/` folder in the project directory.
+
+**Routing audio through OBS / Streamlabs:**
+
+Browser Source audio does not appear in the mixer by default. For each Browser Source that plays audio (Starting Soon, Lineup, Lower Third):
+
+1. In Streamlabs, right-click the Browser Source → **Properties**
+2. Tick **"Control audio via OBS"**
+3. The source will now appear as a track in the Audio Mixer — set the volume there
+
+> If you don't route audio this way, the sounds play inside the browser source process but are never sent to your stream or monitoring output.
 
 ---
 
@@ -98,8 +147,10 @@ For every Browser Source that is **not visible** in the current scene, right-cli
 Open a terminal (Command Prompt or PowerShell) in the folder containing the files and run:
 
 ```
-node server.js
+npm start
 ```
+
+(You can also run `node server.js` directly if you prefer.)
 
 You should see:
 
@@ -186,6 +237,30 @@ Start an unlisted stream to YouTube for 2–3 minutes to confirm video quality, 
 
 ## Using the Controller
 
+### Overlays
+
+The **🎬 Overlays** card at the top of the controller lets you show or hide any overlay directly — no need to switch scenes in Streamlabs.
+
+Each row shows a live status pill:
+- **● LIVE** (green, pulsing) — the overlay is currently visible on stream
+- **○ HIDDEN** (grey) — the overlay is invisible; the Browser Source is still connected
+
+Tap any row to toggle it. Transitions are animated (each overlay has its own effect).
+
+**Default visibility when the server starts:**
+
+| Overlay | Default |
+|---|---|
+| Scoreboard | ● LIVE |
+| Lineup | ○ HIDDEN |
+| Lower Third | ● LIVE |
+| Starting Soon | ○ HIDDEN |
+| BRB | ○ HIDDEN |
+
+> **Tip:** A typical pre-match flow — show Starting Soon while waiting, then hide it and show the Scoreboard when the game begins. For half time, show BRB, then hide it when play resumes.
+
+---
+
 ### Timer
 
 | Button | Action |
@@ -247,7 +322,7 @@ Fouls are tracked per half (reset when you change period). The scoreboard shows 
 
 ### Lower Third
 
-Used for on-screen announcements (goals, substitutions, etc.).
+Used for on-screen announcements (goals, substitutions, etc.). The graphic adapts to the event type: goals show a gold bar with the team logo and trigger a particle burst + shine sweep; red cards use red accents with a strobe flash; substitutions use blue accents. Each event type has its own full-screen flash effect and a matching audio cue.
 
 1. Fill in **Line 1** (player name or event) and **Line 2** (label, e.g. "GOAL")
 2. Choose a duration from the dropdown: **6s / 8s / 10s / 15s / ∞**
@@ -262,7 +337,9 @@ Used for on-screen announcements (goals, substitutions, etc.).
 
 The **Players** card shows the full squad for each team — starters and substitutes in separate sections when the away team has uploaded their roster with substitutes flagged in FOGIS. If a team uploaded a flat list (no substitute distinction), all players are shown together.
 
-The text areas are populated automatically when the roster loads. You can also edit them manually — one player per line. Tap **Save & Push to Overlay** to send them to the lineup overlay. Manual edits will not be overwritten by SSE updates during the session.
+The text areas are populated automatically when the roster loads. You can also edit them manually — one player per line. Tap **Save & Push to Overlay** to send them to the lineup overlay.
+
+Once you manually edit a textarea the field is locked and will not be overwritten by live state updates. To re-sync with the latest roster, tap the **↺ Re-sync** button next to the section heading, or simply run the bookmarklet again — a fresh FOGIS import always clears the lock automatically.
 
 **Quick-pick player buttons** (in the Lower Third card) show the full squad after the roster loads — starters and subs — so you can tap any player for a goal announcement regardless of whether they started.
 
@@ -285,13 +362,24 @@ The text areas are populated automatically when the roster loads. You can also e
 
 Full-screen overlay showing both squads side by side in a mirrored layout (home right-aligned, away left-aligned, logos in the centre). When a team has uploaded substitutes in FOGIS, the overlay automatically shows **Starting** and **Substitutes** section labels. Teams with a flat roster upload show all players without section labels. Populated from FOGIS automatically after the bookmarklet runs.
 
+Plays an attention-grabbing fanfare when it becomes visible and fades the audio out on hide.
+
 ### Starting Soon
 
 Full-screen pre-match overlay showing both team logos, names, league, arena, and a live countdown to kickoff. The hours column hides automatically under 60 minutes. Turns green and shows "It's time!" at zero. Populated from FOGIS automatically after the bookmarklet runs.
 
+Loops a relaxing ambient track while visible — audio fades in on show and fades out on hide, in sync with the visual transition.
+
+### Lower Third
+
+Slides in from the left when triggered. Audio cues:
+- **Goal** — hype crowd track fades in with the slide-in, fades out when dismissed
+- **Red card** — whistle + crowd reaction fires immediately on appearance, fades out on dismiss
+- **Substitution** — no audio (visual-only: orange accents)
+
 ### BRB
 
-Full-screen "We'll Be Right Back" overlay for unexpected breaks. Transparent body — sits over your background image in Streamlabs. No server connection required.
+Full-screen "We'll Be Right Back" overlay for unexpected breaks. Transparent body — sits over your background image in Streamlabs. Connects to the server via SSE so its visibility can be toggled from the 🎬 Overlays card in the controller.
 
 ---
 
@@ -307,7 +395,7 @@ The EventSource connection is being blocked — this usually means the controlle
 Confirm the PC and phone are on the same Wi-Fi. Check the PC's IP address with `ipconfig` (Windows) and use that IP in the URL. Check that Windows Firewall is not blocking port 3000.
 
 **Bookmarklet gives an error**
-Make sure you are logged in to minfotboll.se and are on the actual game page (the URL must contain the game ID, e.g. `/1993474`). The server must be running.
+Make sure you are logged in to minfotboll.se and are on the actual game page (the URL must contain the game ID, e.g. `/1993474`). The server must be running. If the error mentions `file://`, you generated the bookmarklet by opening the HTML file directly — open `http://localhost:3000/bookmarklet` through the server instead, regenerate, and re-save the bookmark.
 
 **Logos not showing**
 The logos are fetched from the FOGIS CDN and proxied through the local server at `/logo/home` and `/logo/away`. They load after the bookmarklet runs. If they still don't appear, check the server terminal for errors.
@@ -320,6 +408,16 @@ body { background-color: rgba(0, 0, 0, 0) !important; }
 
 **Timer / scores not updating on overlays**
 The overlays connect via Server-Sent Events. Refresh the Browser Source in Streamlabs (right-click → Refresh). Make sure the server is still running.
+
+**No audio on overlays**
+Check in order:
+1. Confirm the `.mp3` files exist in the `audio/` folder with the exact filenames listed in [Audio Setup](#4-audio-setup)
+2. In Streamlabs, right-click each audio-enabled Browser Source → Properties → tick **"Control audio via OBS"**
+3. Check the Audio Mixer in Streamlabs — the browser source track must not be muted and volume must not be at zero
+4. If testing outside OBS in a regular browser (Chrome/Edge), audio will be blocked until you click somewhere on the page — this is a browser autoplay restriction that does not affect OBS
+
+**Audio plays but volume doesn't fade correctly**
+Refresh the Browser Source in Streamlabs. This can happen if the overlay page was loaded before the server was ready.
 
 **Dropped frames / stuttering stream**
 Check Windows power plan is set to Best Performance and the charger is plugged in. If still dropping frames, switch to x264 at `veryfast` preset in Streamlabs Output settings — it's slower to encode but uses the CPU instead of the GPU and is more stable on low-end hardware.

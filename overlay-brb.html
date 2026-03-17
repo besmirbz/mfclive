@@ -14,7 +14,10 @@
     height: 1080px;
     overflow: hidden;
     font-family: 'Barlow Condensed', 'Arial Black', Arial, sans-serif;
+    transition: opacity 0.55s ease, transform 0.55s ease;
   }
+  /* Overlay hidden — drifts down softly and fades out */
+  body.ov-hidden { opacity: 0; transform: translateY(14px); pointer-events: none; }
 
   /* ── Animated pitch lines in background ── */
   .pitch {
@@ -274,5 +277,13 @@
 
   <div class="credit">© 2025 Besmir Pepa</div>
 
+<script>
+const es = new EventSource('/events');
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type !== 'state') return;
+  document.body.classList.toggle('ov-hidden', d.overlayVisible?.brb === false);
+};
+</script>
 </body>
 </html>

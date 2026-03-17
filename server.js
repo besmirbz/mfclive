@@ -28,21 +28,24 @@ function getLocalIP() {
 }
 
 // ── Security token — persistent across restarts ────────────────────────────────
-// Stored in token.txt next to server.js. Generated once; delete the file to rotate.
-const TOKEN_FILE = path.join(__dirname, 'token.txt');
+// Stored in ~/.mfclive/token.txt (outside Dropbox/cloud sync folders).
+// Generated once; delete the file to rotate.
+const TOKEN_FILE = path.join(os.homedir(), '.mfclive', 'token.txt');
 let SECRET;
 if (fs.existsSync(TOKEN_FILE)) {
   SECRET = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
 } else {
+  fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
   SECRET = crypto.randomBytes(6).toString('hex');
   fs.writeFileSync(TOKEN_FILE, SECRET, 'utf8');
 }
 
 // Requests from localhost are always allowed (Streamlabs browser sources).
 // Requests from the network must include ?token=SECRET or X-MFCLIVE-Token header.
+// Uses socket remote address (not the Host header, which is attacker-controlled).
 function isAuthorised(req) {
-  const host = req.headers['host'] || '';
-  if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) return true;
+  const ip = req.socket.remoteAddress || '';
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return true;
   const url  = new URL(req.url, `http://localhost:${PORT}`);
   const qTok = url.searchParams.get('token');
   const hTok = req.headers['x-mfclive-token'];
@@ -85,7 +88,15 @@ const state = {
   lineup: {
     home: ['#1 Keeper','#4 Player','#7 Player','#9 Player','#11 Player'],
     away: ['#1 Keeper','#5 Player','#8 Player','#10 Player','#14 Player'],
-  }
+  },
+  // Overlay visibility — controls show/hide of each browser source
+  overlayVisible: {
+    scoreboard:   true,
+    lineup:       false,
+    lowerthird:   true,
+    startingsoon: false,
+    brb:          false,
+  },
 };
 
 // ── SSE clients ────────────────────────────────────────────────────────────────
@@ -125,16 +136,19 @@ function getPublicState() {
     homeFouls:    state.homeFouls,
     awayFouls:    state.awayFouls,
     redCards,
-    lowerThird:   state.lowerThird,
-    lineup:       state.lineup,
-    arena:        state.arena,
+    lowerThird:      state.lowerThird,
+    lineup:          state.lineup,
+    overlayVisible:  state.overlayVisible,
+    arena:           state.arena,
     league:       state.league,
     homePlayers:  state._homePlayers || [],
     awayPlayers:  state._awayPlayers || [],
-    homeStarters: state._homeStarters || [],
-    homeSubs:     state._homeSubs     || [],
-    awayStarters: state._awayStarters || [],
-    awaySubs:     state._awaySubs     || [],
+    homeStarters:  state._homeStarters  || [],
+    homeSubs:      state._homeSubs      || [],
+    homeSepLabel:  state._homeSepLabel  || 'Substitutes',
+    awayStarters:  state._awayStarters  || [],
+    awaySubs:      state._awaySubs      || [],
+    awaySepLabel:  state._awaySepLabel  || 'Substitutes',
   };
 }
 
@@ -273,13 +287,16 @@ function handleAction(action, payload) {
 
     case 'set_lineup': {
       const SEP = /^---/;
-      // Split a flat lineup array at the '--- Substitutes ---' separator line.
+      // Split a flat lineup array at the '--- <label> ---' separator line.
+      // The label text between the dashes is preserved and returned as sepLabel.
       function splitLineupText(lines) {
         const idx = lines.findIndex(l => SEP.test(l.trim()));
-        if (idx === -1) return { starters: lines.filter(Boolean), subs: [] };
+        if (idx === -1) return { starters: lines.filter(Boolean), subs: [], sepLabel: 'Substitutes' };
+        const raw = lines[idx].trim().replace(/^-+\s*/, '').replace(/\s*-+$/, '').trim();
         return {
           starters: lines.slice(0, idx).filter(Boolean),
           subs:     lines.slice(idx + 1).filter(Boolean),
+          sepLabel: raw || 'Substitutes',
         };
       }
       // Parse a '#NUM Name (C)' lineup line into the player object used by quick-pick.
@@ -293,16 +310,18 @@ function handleAction(action, payload) {
       }
       if (payload.home) {
         state.lineup.home = payload.home;
-        const { starters, subs } = splitLineupText(payload.home);
+        const { starters, subs, sepLabel } = splitLineupText(payload.home);
         state._homeStarters = starters;
         state._homeSubs     = subs;
+        state._homeSepLabel = sepLabel;
         state._homePlayers  = [...starters, ...subs].map(lineupLineToPlayer).filter(Boolean);
       }
       if (payload.away) {
         state.lineup.away = payload.away;
-        const { starters, subs } = splitLineupText(payload.away);
+        const { starters, subs, sepLabel } = splitLineupText(payload.away);
         state._awayStarters = starters;
         state._awaySubs     = subs;
+        state._awaySepLabel = sepLabel;
         state._awayPlayers  = [...starters, ...subs].map(lineupLineToPlayer).filter(Boolean);
       }
       break;
@@ -311,6 +330,14 @@ function handleAction(action, payload) {
       if (payload.homeTeam) state.homeTeam = payload.homeTeam.slice(0,6).toUpperCase();
       if (payload.awayTeam) state.awayTeam = payload.awayTeam.slice(0,6).toUpperCase();
       break;
+
+    case 'overlay_set': {
+      const VALID_OVERLAYS = ['scoreboard','lineup','lowerthird','startingsoon','brb'];
+      if (VALID_OVERLAYS.includes(payload.name) && typeof payload.visible === 'boolean') {
+        state.overlayVisible[payload.name] = payload.visible;
+      }
+      break;
+    }
     case 'timer_set':
       state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;
@@ -319,24 +346,108 @@ function handleAction(action, payload) {
   broadcast(getPublicState());
 }
 
+// ── FOGIS roster processing ────────────────────────────────────────────────────
+
+const https = require('https');
+
+function processRosterData(timeline, lineup) {
+  const hdr = timeline?.GameHeaderInfo || {};
+
+  const MFC_KEYWORDS = ['malmö futsal', 'mfc'];
+  const fogisHomeName = (hdr.HomeTeamDisplayName || '').toLowerCase();
+  const mfcIsHome = MFC_KEYWORDS.some(k => fogisHomeName.includes(k));
+
+  const ourHomeRoster = mfcIsHome ? lineup?.HomeTeamGameTeamRoster : lineup?.AwayTeamGameTeamRoster;
+  const ourAwayRoster = mfcIsHome ? lineup?.AwayTeamGameTeamRoster : lineup?.HomeTeamGameTeamRoster;
+  const ourHomeTeam   = mfcIsHome ? hdr.HomeTeamDisplayName : hdr.AwayTeamDisplayName;
+  const ourAwayTeam   = mfcIsHome ? hdr.AwayTeamDisplayName : hdr.HomeTeamDisplayName;
+  const ourHomeLogo   = mfcIsHome ? hdr.HomeTeamClubLogoURL : hdr.AwayTeamClubLogoURL;
+  const ourAwayLogo   = mfcIsHome ? hdr.AwayTeamClubLogoURL : hdr.HomeTeamClubLogoURL;
+
+  function abbreviateTeam(name) {
+    if (!name) return name;
+    const KEEP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','ifk','iff','fik']);
+    return name.trim().split(/\s+/)
+      .map(w => (KEEP.has(w.toLowerCase()) || (w === w.toUpperCase() && w.length <= 4))
+        ? w.toUpperCase() : w[0].toUpperCase())
+      .join('').slice(0, 6);
+  }
+  state.homeTeam = abbreviateTeam(ourHomeTeam) || state.homeTeam;
+  state.awayTeam = abbreviateTeam(ourAwayTeam) || state.awayTeam;
+  state.homeLogo = ourHomeLogo || '';
+  state.awayLogo = ourAwayLogo || '';
+  state.arena    = hdr.ArenaName || '';
+  state.league   = hdr.LeagueDisplayName || '';
+
+  function splitRoster(roster) {
+    if (!roster) return { starters: [], subs: [] };
+    const starters = (roster.Players || [])
+      .filter(p => !p.IsPlayingTeamStaff && !p.IsContactPerson)
+      .sort((a, b) => a.ShirtNumber - b.ShirtNumber);
+    const subs = (roster.Substitutes || [])
+      .filter(p => !p.IsPlayingTeamStaff && !p.IsContactPerson)
+      .sort((a, b) => a.ShirtNumber - b.ShirtNumber);
+    return { starters, subs };
+  }
+  function formatPlayer(p) {
+    return `#${p.ShirtNumber} ${p.FullName}${p.IsTeamCaptain ? ' (C)' : ''}`;
+  }
+
+  const homeSplit = splitRoster(ourHomeRoster);
+  const awaySplit = splitRoster(ourAwayRoster);
+
+  function buildLineupText(split) {
+    const s = split.starters.map(formatPlayer);
+    const b = split.subs.map(formatPlayer);
+    return b.length ? [...s, '--- Substitutes ---', ...b] : s;
+  }
+  state.lineup.home = buildLineupText(homeSplit);
+  state.lineup.away = buildLineupText(awaySplit);
+
+  state._homeStarters = homeSplit.starters.map(formatPlayer);
+  state._homeSubs     = homeSplit.subs.map(formatPlayer);
+  state._homeSepLabel = 'Substitutes';
+  state._awayStarters = awaySplit.starters.map(formatPlayer);
+  state._awaySubs     = awaySplit.subs.map(formatPlayer);
+  state._awaySepLabel = 'Substitutes';
+  state._homePlayers  = [...homeSplit.starters, ...homeSplit.subs]
+    .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
+  state._awayPlayers  = [...awaySplit.starters, ...awaySplit.subs]
+    .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
+
+  broadcast(getPublicState());
+  return {
+    homeTeam:    state.homeTeam,
+    awayTeam:    state.awayTeam,
+    homePlayers: state._homePlayers.length,
+    awayPlayers: state._awayPlayers.length,
+    arena:       state.arena,
+  };
+}
+
+
+
 // ── HTTP Server ────────────────────────────────────────────────────────────────
 
 // ── Single consolidated HTTP router ───────────────────────────────────────────
-const https = require('https');
 const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const route = url.pathname;
 
-  // Tighten CORS — only allow localhost origins, not the open web
-  // Use URL parsing instead of .includes() to prevent bypass via hostnames like
-  // attacker.localhost.evil.com that would pass a naive string-contains check.
+  // /import-roster is called cross-origin by the bookmarklet (running on minfotboll.se).
+  // It is already token-protected, so open CORS is safe for that route only.
+  // All other routes only allow localhost origins (Streamlabs browser sources).
   const origin = req.headers['origin'] || '';
-  try {
-    const o = new URL(origin);
-    if (o.hostname === 'localhost' || o.hostname === '127.0.0.1') {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-  } catch { /* malformed origin — deny */ }
+  if (route === '/import-roster') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else {
+    try {
+      const o = new URL(origin);
+      if (o.hostname === 'localhost' || o.hostname === '127.0.0.1') {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
+    } catch { /* malformed origin — deny */ }
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MFCLIVE-Token');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
@@ -354,13 +465,16 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   // ── SSE stream ──────────────────────────────────────────────────────────────
   if (route === '/events') {
     res.writeHead(200, {
-      'Content-Type':  'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection':    'keep-alive',
+      'Content-Type':        'text/event-stream',
+      'Cache-Control':       'no-cache',
+      'Connection':          'keep-alive',
+      'X-Accel-Buffering':   'no',   // prevent Cloudflare / nginx buffering
     });
     res.write(`data: ${JSON.stringify(getPublicState())}\n\n`);
     clients.add(res);
-    req.on('close', () => clients.delete(res));
+    // Keepalive ping every 25 s — prevents Cloudflare from closing idle tunnels
+    const ping = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { clearInterval(ping); } }, 25000);
+    req.on('close', () => { clients.delete(res); clearInterval(ping); });
     return;
   }
 
@@ -379,140 +493,36 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     return;
   }
 
-  // ── Import roster (called by bookmarklet via window.open GET) ───────────────
+  // ── Import roster (called by bookmarklet — legacy support) ─────────────────
   if (route === '/import-roster') {
-    function processRosterData(timeline, lineup) {
-      const hdr = timeline?.GameHeaderInfo || {};
-
-      // Determine if MFC is the home or away team in FOGIS data
-      // so we always show MFC on the left (home) side in our overlay
-      const MFC_KEYWORDS = ['malmö futsal', 'mfc'];
-      const fogisHomeName = (hdr.HomeTeamDisplayName || '').toLowerCase();
-      const mfcIsHome = MFC_KEYWORDS.some(k => fogisHomeName.includes(k));
-
-      // Assign home/away so MFC is always our "home" side
-      const ourHomeRoster  = mfcIsHome ? lineup?.HomeTeamGameTeamRoster : lineup?.AwayTeamGameTeamRoster;
-      const ourAwayRoster  = mfcIsHome ? lineup?.AwayTeamGameTeamRoster : lineup?.HomeTeamGameTeamRoster;
-      const ourHomeTeam    = mfcIsHome ? hdr.HomeTeamDisplayName : hdr.AwayTeamDisplayName;
-      const ourAwayTeam    = mfcIsHome ? hdr.AwayTeamDisplayName : hdr.HomeTeamDisplayName;
-      const ourHomeLogo    = mfcIsHome ? hdr.HomeTeamClubLogoURL : hdr.AwayTeamClubLogoURL;
-      const ourAwayLogo    = mfcIsHome ? hdr.AwayTeamClubLogoURL : hdr.HomeTeamClubLogoURL;
-
-      // Abbreviate team name for scoreboard display.
-      // Known sport suffixes (IF, FC, BK etc.) are kept whole.
-      // All other words contribute their first letter only.
-      // e.g. "Malmö Futsal Club" → "MFC", "Öjersjö IF" → "ÖIF", "Malmö FC" → "MFC"
-      function abbreviateTeam(name) {
-        if (!name) return name;
-        const KEEP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','ifk','iff','fik']);
-        return name.trim().split(/\s+/)
-          .map(w => (KEEP.has(w.toLowerCase()) || (w === w.toUpperCase() && w.length <= 4))
-            ? w.toUpperCase() : w[0].toUpperCase())
-          .join('')
-          .slice(0, 6);
-      }
-      state.homeTeam = abbreviateTeam(ourHomeTeam) || state.homeTeam;
-      state.awayTeam = abbreviateTeam(ourAwayTeam) || state.awayTeam;
-      state.homeLogo = ourHomeLogo || '';
-      state.awayLogo = ourAwayLogo || '';
-      state.arena    = hdr.ArenaName || '';
-      state.league   = hdr.LeagueDisplayName || '';
-
-      // Split a roster into { starters, subs } using the separate FOGIS arrays.
-      // roster.Players = starting 5, roster.Substitutes = bench players.
-      // If Substitutes is absent or empty (flat upload), subs is [] — graceful fallback.
-      function splitRoster(roster) {
-        if (!roster) return { starters: [], subs: [] };
-        const starters = (roster.Players || [])
-          .filter(p => !p.IsPlayingTeamStaff && !p.IsContactPerson)
-          .sort((a, b) => a.ShirtNumber - b.ShirtNumber);
-        const subs = (roster.Substitutes || [])
-          .filter(p => !p.IsPlayingTeamStaff && !p.IsContactPerson)
-          .sort((a, b) => a.ShirtNumber - b.ShirtNumber);
-        return { starters, subs };
-      }
-
-      function formatPlayer(p) {
-        return `#${p.ShirtNumber} ${p.FullName}${p.IsTeamCaptain ? ' (C)' : ''}`;
-      }
-
-      const homeSplit = splitRoster(ourHomeRoster);
-      const awaySplit = splitRoster(ourAwayRoster);
-
-      // lineup.home / lineup.away: flat string list for controller textarea.
-      // A '--- Substitutes ---' separator is included when subs exist so the
-      // boundary survives a manual Save & Push round-trip.
-      function buildLineupText(split) {
-        const s = split.starters.map(formatPlayer);
-        const b = split.subs.map(formatPlayer);
-        return b.length ? [...s, '--- Substitutes ---', ...b] : s;
-      }
-      state.lineup.home = buildLineupText(homeSplit);
-      state.lineup.away = buildLineupText(awaySplit);
-
-      // Expose starters and subs separately for the lineup overlay
-      state._homeStarters = homeSplit.starters.map(formatPlayer);
-      state._homeSubs     = homeSplit.subs.map(formatPlayer);
-      state._awayStarters = awaySplit.starters.map(formatPlayer);
-      state._awaySubs     = awaySplit.subs.map(formatPlayer);
-
-      // Quick-pick buttons in the controller — full squad (starters then subs)
-      state._homePlayers = [...homeSplit.starters, ...homeSplit.subs]
-        .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
-      state._awayPlayers = [...awaySplit.starters, ...awaySplit.subs]
-        .map(p => ({ num: p.ShirtNumber, name: p.FullName, cap: p.IsTeamCaptain }));
-      broadcast(getPublicState());
-      return {
-        homeTeam:    state.homeTeam,
-        awayTeam:    state.awayTeam,
-        homePlayers: state._homePlayers.length,
-        awayPlayers: state._awayPlayers.length,
-        arena:       state.arena,
-      };
-    }
-
     function successPage(r) {
       return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>*{margin:0;padding:0;box-sizing:border-box;}
-body{background:#050B18;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}
-.box{text-align:center;padding:40px;max-width:480px;}
-.icon{font-size:52px;margin-bottom:18px;}
-h2{color:#7DB8F7;font-size:22px;margin-bottom:10px;}
-p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}
-.closing{margin-top:20px;font-size:12px;color:rgba(125,184,247,.35);}
-</style></head><body><div class="box">
-<div class="icon">✅</div>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#050B18;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}.box{text-align:center;padding:40px;max-width:480px;}.icon{font-size:52px;margin-bottom:18px;}h2{color:#7DB8F7;font-size:22px;margin-bottom:10px;}p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}.closing{margin-top:20px;font-size:12px;color:rgba(125,184,247,.35);}</style>
+</head><body><div class="box"><div class="icon">✅</div>
 <h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
 <p>${esc(r.homePlayers)} home players · ${esc(r.awayPlayers)} away players loaded<br>${esc(r.arena)}</p>
 <p class="closing">This tab will close in 3 seconds…</p>
-</div><script>setTimeout(()=>window.close(),3000);</script>
-</body></html>`;
+</div><script>setTimeout(()=>window.close(),3000);</script></body></html>`;
     }
-
-    // GET — data in base64 query param from bookmarklet
     if (req.method === 'GET') {
       const raw = url.searchParams.get('data');
       if (!raw) { res.writeHead(400); res.end('Missing data param'); return; }
       try {
         const decoded = Buffer.from(decodeURIComponent(raw), 'base64').toString('utf8');
         const { timeline, lineup } = JSON.parse(decoded);
-        const result = processRosterData(timeline, lineup);
         res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(successPage(result));
+        res.end(successPage(processRosterData(timeline, lineup)));
       } catch(e) {
         res.writeHead(400, { 'Content-Type': 'text/html' });
-        res.end(`<html><body style="background:#050B18;color:#ef4444;font-family:sans-serif;padding:40px;"><h2>Parse error</h2><pre>${e.message}</pre></body></html>`);
+        res.end(`<html><body style="background:#050B18;color:#ef4444;font-family:sans-serif;padding:40px;"><h2>Parse error</h2><pre>${esc(e.message)}</pre></body></html>`);
       }
       return;
     }
-
-    // POST — from bookmarklet via form submit (data=BASE64 in body)
     if (req.method === 'POST') {
       let body = '';
       req.on('data', d => { body += d; if (body.length > 512 * 1024) { res.writeHead(413); res.end('Too large'); req.destroy(); } });
       req.on('end', () => {
         try {
-          // Support both form-encoded (data=BASE64) and raw JSON
           let timeline, lineup;
           if (body.startsWith('data=')) {
             const raw = Buffer.from(decodeURIComponent(body.slice(5)), 'base64').toString('utf8');
@@ -520,22 +530,24 @@ p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}
           } else {
             ({ timeline, lineup } = JSON.parse(body));
           }
-          const result = processRosterData(timeline, lineup);
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(successPage(result));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(processRosterData(timeline, lineup)));
         } catch(e) {
-          res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end(`<html><body style="background:#050B18;color:#ef4444;font-family:sans-serif;padding:40px;"><h2>Parse error</h2><pre>${e.message}</pre></body></html>`);
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
         }
       });
       return;
     }
   }
 
+
+
   // ── Serve HTML overlay files ────────────────────────────────────────────────
   const fileMap = {
     '/':              'controller.html',
     '/controller':    'controller.html',
+    '/bookmarklet':   'bookmarklet.html',
     '/scoreboard':    'overlay-scoreboard.html',
     '/lowerthird':    'overlay-lowerthird.html',
     '/lineup':        'overlay-lineup.html',
@@ -547,8 +559,8 @@ p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}
     const fp = path.join(__dirname, file);
     if (fs.existsSync(fp)) {
       let html = fs.readFileSync(fp, 'utf8');
-      // Inject the session token into the controller so it can auth its fetch calls
-      if (file === 'controller.html') {
+      // Inject the session token into pages that need it
+      if (file === 'controller.html' || file === 'bookmarklet.html') {
         html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN="${SECRET}";</script>\n</head>`);
       }
       res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -560,9 +572,25 @@ p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}
   }
 
   // ── Logo proxy — fetches FOGIS CDN logo and serves it locally (avoids CORS) ──
+  // URL is validated to be HTTPS and non-private to prevent SSRF.
+  function isSafeLogoUrl(raw) {
+    try {
+      const u = new URL(raw);
+      if (u.protocol !== 'https:') return false;
+      const h = u.hostname;
+      if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return false;
+      if (/^10\./.test(h))                                         return false;
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h))                   return false;
+      if (/^192\.168\./.test(h))                                   return false;
+      if (/^169\.254\./.test(h))                                   return false; // link-local / AWS metadata
+      return true;
+    } catch { return false; }
+  }
+
   if (route === '/logo/home' || route === '/logo/away') {
     const logoUrl = route === '/logo/home' ? state.homeLogo : state.awayLogo;
     if (!logoUrl) { res.writeHead(404); res.end('No logo set'); return; }
+    if (!isSafeLogoUrl(logoUrl)) { res.writeHead(400); res.end('Invalid logo URL'); return; }
     const logoReq = https.get(logoUrl, logoRes => {
       res.writeHead(200, {
         'Content-Type':  logoRes.headers['content-type'] || 'image/png',
@@ -574,6 +602,21 @@ p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}
     return;
   }
 
+  // ── Serve audio files from ./audio/ ────────────────────────────────────────
+  if (route.startsWith('/audio/')) {
+    const filename = path.basename(route); // prevent path traversal
+    const fp = path.join(__dirname, 'audio', filename);
+    if (fs.existsSync(fp)) {
+      const ext = path.extname(filename).toLowerCase();
+      const mime = { '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' }[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' });
+      fs.createReadStream(fp).pipe(res);
+    } else {
+      res.writeHead(404); res.end('Audio file not found: ' + filename);
+    }
+    return;
+  }
+
   res.writeHead(404); res.end('Not found');
 });
 
@@ -582,6 +625,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n✅  MFCLIVE — Overlay Server  (port ${PORT})`);
   console.log(`\n   ── Open this on your phone ──`);
   console.log(`   Controller    →  http://${localIP}:${PORT}/controller?token=${SECRET}`);
+  console.log(`\n   ── Bookmarklet setup (open once to configure) ──`);
+  console.log(`   Bookmarklet   →  http://${localIP}:${PORT}/bookmarklet?token=${SECRET}`);
   console.log(`\n   ── Streamlabs Browser Sources (localhost — no token needed) ──`);
   console.log(`   Scoreboard    →  http://localhost:${PORT}/scoreboard`);
   console.log(`   Lower Third   →  http://localhost:${PORT}/lowerthird`);

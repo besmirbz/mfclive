@@ -5,7 +5,8 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:transparent; font-family:'Arial Black',Arial,sans-serif; width:1920px; height:1080px; overflow:hidden; }
+  body { background:transparent; font-family:'Arial Black',Arial,sans-serif; width:1920px; height:1080px; overflow:hidden; transition: opacity 0.45s ease; }
+  body.ov-hidden { opacity: 0; pointer-events: none; }
 
   #lt {
     position: absolute;
@@ -263,6 +264,26 @@ function triggerRedCardFx() {
   setTimeout(() => ltEl.classList.remove('pulse-red'), 1100);
 }
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+function fadeAudio(audio, toVol, durationMs) {
+  clearInterval(audio._fadeTimer);
+  const steps = Math.max(1, Math.round(durationMs / 16));
+  const fromVol = audio.volume;
+  let step = 0;
+  audio._fadeTimer = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
+    if (step >= steps) {
+      clearInterval(audio._fadeTimer);
+      if (toVol === 0) audio.pause();
+    }
+  }, durationMs / steps);
+}
+const goalAudio = new Audio('/audio/goal.mp3');
+const rcAudio   = new Audio('/audio/redcard-whistle.mp3');
+goalAudio.volume = 0;
+rcAudio.volume   = 0;
+
 // ── SSE ────────────────────────────────────────────────────────────────────────
 let wasVisible = false;
 
@@ -272,6 +293,8 @@ es.onmessage = e => {
   if (d.type !== 'state') return;
   const lt   = document.getElementById('lt');
   const foot = document.getElementById('ltFoot');
+
+  document.body.classList.toggle('ov-hidden', d.overlayVisible?.lowerthird === false);
 
   if (d.lowerThird.visible) {
     document.getElementById('ltLine1').textContent = d.lowerThird.line1 || '';
@@ -308,12 +331,26 @@ es.onmessage = e => {
         if (ev === 'goal')    triggerGoalFx();
         if (ev === 'redcard') triggerRedCardFx();
       }, 580);
+      // Audio — fade in synced to slide-in transition
+      if (ev === 'goal') {
+        goalAudio.currentTime = 0;
+        goalAudio.volume = 0;
+        goalAudio.play().catch(() => {});
+        fadeAudio(goalAudio, 0.85, 250);
+      } else if (ev === 'redcard') {
+        rcAudio.currentTime = 0;
+        rcAudio.volume = 0;
+        rcAudio.play().catch(() => {});
+        fadeAudio(rcAudio, 0.85, 150);
+      }
     }
 
     wasVisible = true;
   } else {
     lt.classList.remove('visible');
     foot.classList.remove('visible');
+    fadeAudio(goalAudio, 0, 500);
+    fadeAudio(rcAudio,   0, 500);
     wasVisible = false;
   }
 };
