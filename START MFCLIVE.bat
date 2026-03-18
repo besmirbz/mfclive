@@ -1,11 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
-title MFCLIVE — Setup & Launcher
+title MFCLIVE - Setup & Launcher
 cd /d "%~dp0"
 
 echo.
 echo  =====================================================
-echo    MFCLIVE — Setup ^& Launcher
+echo    MFCLIVE - Setup ^& Launcher
 echo  =====================================================
 echo.
 echo  Checking requirements...
@@ -17,7 +17,7 @@ echo.
 call :check_node
 if "!NODE_OK!"=="1" goto node_done
 
-echo  [ ] Node.js not found — attempting install...
+echo  [ ] Node.js not found - attempting install...
 
 :: Try winget (available on Windows 10 1709+ and Windows 11)
 where winget >nul 2>&1
@@ -33,14 +33,14 @@ if not errorlevel 1 (
 echo      Downloading Node.js LTS installer...
 powershell -ExecutionPolicy Bypass -NoProfile -Command "$v=(Invoke-RestMethod 'https://nodejs.org/dist/index.json'|Where-Object{$_.lts}|Select-Object -First 1).version;Invoke-WebRequest \"https://nodejs.org/dist/$v/node-$v-x64.msi\" -OutFile \"$env:TEMP\nodejs-setup.msi\" -UseBasicParsing" >nul 2>&1
 if exist "%TEMP%\nodejs-setup.msi" (
-  echo      Running installer — follow the prompts...
+  echo      Running installer - follow the prompts...
   start /wait msiexec /i "%TEMP%\nodejs-setup.msi" /passive /norestart
   call :refresh_path
   call :check_node
   if "!NODE_OK!"=="1" goto node_done
 )
 
-:: Give up — manual install required
+:: Give up - manual install required
 echo.
 echo  [!!] Could not install Node.js automatically.
 echo       Please install it from https://nodejs.org/ and run this file again.
@@ -58,14 +58,14 @@ echo  [OK] Node.js !NODE_VER!
 call :check_cloudflared
 if "!CF_OK!"=="1" goto cf_done
 
-echo  [ ] cloudflared not found — downloading...
+echo  [ ] cloudflared not found - downloading...
 set "CF_DEST=%~dp0cloudflared.exe"
 powershell -ExecutionPolicy Bypass -NoProfile -Command "Invoke-WebRequest 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile '%CF_DEST%' -UseBasicParsing" >nul 2>&1
 call :check_cloudflared
 if "!CF_OK!"=="1" (
   echo  [OK] cloudflared downloaded
 ) else (
-  echo  [ ] cloudflared unavailable — controller will only work on local WiFi
+  echo  [ ] cloudflared unavailable - controller will only work on local WiFi
 )
 goto cf_done
 
@@ -92,7 +92,7 @@ if not exist "node_modules" (
 ::  4. LAUNCH
 :: ──────────────────────────────────────────────────────
 echo.
-echo  All good — starting MFCLIVE...
+echo  All good - starting MFCLIVE...
 echo.
 start "MFCLIVE Server" cmd /k "title MFCLIVE Server && node server.js"
 exit /b 0

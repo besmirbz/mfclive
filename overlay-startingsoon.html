@@ -467,12 +467,13 @@ const bgAudio = new Audio('/audio/startingsoon-loop.mp3');
 bgAudio.loop   = true;
 bgAudio.volume = 0;
 let wasStartingSoon = false;
+let _isInitialSync  = false;
 
 // ── SSE — pull team names, logos, league, arena from server state ────────────
 let _sseDelay = 1000;
 function connectSSE() {
   const es = new EventSource('/events');
-  es.onopen  = () => { _sseDelay = 1000; };
+  es.onopen  = () => { _sseDelay = 1000; _isInitialSync = true; };
   es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
   es.onmessage = e => {
   const d = JSON.parse(e.data);
@@ -525,14 +526,17 @@ function connectSSE() {
 
   const nowVisible = (d.overlayVisible||{}).startingsoon !== false;
   document.body.classList.toggle('ov-hidden', !nowVisible);
-  if (nowVisible && !wasStartingSoon) {
-    bgAudio.currentTime = 0;
-    bgAudio.play().catch(() => {});
-    fadeAudio(bgAudio, 0.6, 800);
-  } else if (!nowVisible && wasStartingSoon) {
-    fadeAudio(bgAudio, 0, 600);
+  if (!_isInitialSync) {
+    if (nowVisible && !wasStartingSoon) {
+      bgAudio.currentTime = 0;
+      bgAudio.play().catch(() => {});
+      fadeAudio(bgAudio, 0.6, 800);
+    } else if (!nowVisible && wasStartingSoon) {
+      fadeAudio(bgAudio, 0, 600);
+    }
   }
   wasStartingSoon = nowVisible;
+  _isInitialSync  = false;
   };
 }
 connectSSE();
