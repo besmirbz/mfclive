@@ -725,6 +725,10 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       'Connection':          'keep-alive',
       'X-Accel-Buffering':   'no',   // prevent Cloudflare / nginx buffering
     });
+    // 2 KB padding comment flushes Cloudflare / nginx proxy buffers before the
+    // first real event — without this, Cloudflare Quick Tunnel holds the response
+    // until its buffer threshold is met, leaving clients stuck on "connecting…"
+    res.write(': ' + ' '.repeat(2045) + '\n\n');
     res.write(`data: ${JSON.stringify(getPublicState())}\n\n`);
     clients.add(res);
     // Keepalive ping every 25 s — prevents Cloudflare from closing idle tunnels
