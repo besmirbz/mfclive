@@ -721,14 +721,16 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   if (route === '/events') {
     res.writeHead(200, {
       'Content-Type':        'text/event-stream',
-      'Cache-Control':       'no-cache',
+      'Cache-Control':       'no-cache, no-transform',
       'Connection':          'keep-alive',
-      'X-Accel-Buffering':   'no',   // prevent Cloudflare / nginx buffering
+      'X-Accel-Buffering':   'no',        // nginx / Cloudflare: disable buffering
+      'Content-Encoding':    'identity',  // prevent Cloudflare gzip-buffering the stream
     });
-    // 2 KB padding comment flushes Cloudflare / nginx proxy buffers before the
-    // first real event — without this, Cloudflare Quick Tunnel holds the response
-    // until its buffer threshold is met, leaving clients stuck on "connecting…"
-    res.write(': ' + ' '.repeat(2045) + '\n\n');
+    // Disable Nagle's algorithm so each write() flushes to the network immediately
+    if (res.socket) res.socket.setNoDelay(true);
+    // Padding fills Cloudflare's proxy read-buffer (typically 4 KB) before the
+    // first real event, forcing an immediate flush to the browser.
+    res.write(': ' + ' '.repeat(4093) + '\n\n');
     res.write(`data: ${JSON.stringify(getPublicState())}\n\n`);
     clients.add(res);
     // Keepalive ping every 25 s — prevents Cloudflare from closing idle tunnels
