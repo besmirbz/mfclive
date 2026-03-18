@@ -215,6 +215,11 @@ const state = {
   ytUrl: '',
   // Kickoff time for Starting Soon overlay (HH:MM string, settable from controller)
   kickoffTime: '',
+  // Set by processRosterData() — initialised here so getPublicState() never broadcasts undefined
+  homeLogo: '',
+  awayLogo: '',
+  arena:    '',
+  league:   '',
 };
 
 // ── State persistence ──────────────────────────────────────────────────────────
@@ -540,15 +545,11 @@ function handleAction(action, payload) {
       break;
     }
     case 'set_yt_url':
-      state.ytUrl = (typeof payload.url === 'string') ? payload.url.slice(0, 200) : '';
+      state.ytUrl = (typeof payload.url === 'string') ? payload.url.slice(0, 300) : '';
       break;
     case 'timer_set':
       state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;
-      break;
-
-    case 'set_yt_url':
-      state.ytUrl = String(payload.url || '').slice(0, 300);
       break;
 
     case 'set_kickoff':
@@ -875,7 +876,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       });
       logoRes.pipe(res);
     });
-    logoReq.on('timeout', () => { logoReq.destroy(); res.writeHead(504); res.end('Logo fetch timed out'); });
+    logoReq.on('timeout', () => { logoReq.destroy(); if (res.headersSent) { res.end(); } else { res.writeHead(504); res.end('Logo fetch timed out'); } });
     logoReq.on('error', () => { logoReq.destroy(); if (res.headersSent) { res.end(); } else { res.writeHead(502); res.end('Logo fetch failed'); } });
     return;
   }
