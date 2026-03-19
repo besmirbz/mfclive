@@ -3,8 +3,10 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600&display=swap');
 
   * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -278,12 +280,28 @@
   <div class="credit">© 2025 Besmir Pepa</div>
 
 <script>
-const es = new EventSource('/events');
-es.onmessage = e => {
-  const d = JSON.parse(e.data);
-  if (d.type !== 'state') return;
-  document.body.classList.toggle('ov-hidden', d.overlayVisible?.brb === false);
-};
+let _sseDelay = 1000;
+let _sseRetries = 0;
+const _SSE_MAX_RETRIES = 30;
+function connectSSE() {
+  if (_sseRetries >= _SSE_MAX_RETRIES) { console.warn('[sse] giving up after max retries'); return; }
+  const es = new EventSource('/events');
+  es.onopen  = () => { _sseDelay = 1000; _sseRetries = 0; };
+  es.onerror = () => {
+    es.close();
+    _sseRetries++;
+    if (_sseRetries < _SSE_MAX_RETRIES) setTimeout(connectSSE, _sseDelay);
+    else console.warn('[sse] giving up after max retries');
+    _sseDelay = Math.min(_sseDelay * 2, 30000);
+  };
+  es.onmessage = e => {
+    let d;
+    try { d = JSON.parse(e.data); } catch { return; }
+    if (d.type !== 'state') return;
+    document.body.classList.toggle('ov-hidden', (d.overlayVisible||{}).brb === false);
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>

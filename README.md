@@ -25,8 +25,11 @@ You run the controller on your phone during the game. You don't need to touch th
 
 | File / Folder | Purpose |
 |---|---|
-| `server.js` | The backend — run this on the stream PC before every game |
-| `controller.html` | The control panel — open on your phone/tablet |
+| `START MFCLIVE.bat` | **Double-click to launch** — installs requirements automatically and starts the server |
+| `server.js` | The backend server — started automatically by the bat file |
+| `config.json` | Club configuration — name, keywords, port, half duration |
+| `wizard.html` | Game setup wizard — opens automatically in your browser after launch |
+| `controller.html` | The control panel — open on your phone/tablet via QR code |
 | `overlay-scoreboard.html` | Scoreboard overlay — add as Browser Source in Streamlabs |
 | `overlay-lineup.html` | Starting lineup overlay — add as Browser Source in Streamlabs |
 | `overlay-lowerthird.html` | Lower-third announcements — add as Browser Source in Streamlabs |
@@ -41,22 +44,41 @@ All files must be kept in the **same folder** on the stream PC.
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) installed on the stream PC (v14 or newer; v18+ recommended)
 - [Streamlabs](https://streamlabs.com/) for streaming
 - Google Chrome on the stream PC (for the bookmarklet)
-- A phone or tablet on the same Wi-Fi network as the stream PC
+- A phone or tablet with a browser (any network — see [Cloudflare tunnel](#cloudflare-tunnel))
+
+> Node.js and cloudflared are installed automatically by `START MFCLIVE.bat` if not already present.
 
 ---
 
 ## First-Time Setup
 
-### 1. Set up the FOGIS bookmarklet
+### 1. Configure your club
+
+Open `config.json` and update it for your club:
+
+```json
+{
+  "club": "Malmö Futsal Club",
+  "clubKeywords": ["malmö futsal", "mfc"],
+  "halfDurationMinutes": 20,
+  "port": 3000
+}
+```
+
+- **`club`** — display name shown on the setup page
+- **`clubKeywords`** — used to identify your team in FOGIS results (lowercase, partial match)
+- **`halfDurationMinutes`** — timer start value (20 for futsal, 45 for football)
+- **`port`** — leave as 3000 unless something else is using it
+
+### 2. Set up the FOGIS bookmarklet
 
 > **Swedish clubs only.** FOGIS (minfotboll.se) is the Swedish Football Federation's game management system. This step lets you load team rosters, logos, and venue info automatically with one click. If your club doesn't use FOGIS, skip this step — you can enter team names and lineups manually in the controller.
 
-> ⚠️ **Important:** The bookmarklet setup page must be opened through the server, not by double-clicking the file. Start the server first (`npm start`), then open `http://localhost:3000/bookmarklet` in Chrome.
+> ⚠️ **Important:** The bookmarklet setup page must be opened through the server, not by double-clicking the file. Start the server first (double-click `START MFCLIVE.bat`), then open `http://localhost:3000/bookmarklet` in Chrome.
 
-1. Start the server (`npm start`) and open `http://localhost:3000/bookmarklet` in Chrome
+1. Start the server and open `http://localhost:3000/bookmarklet` in Chrome
 2. Press **Ctrl+Shift+B** to show the bookmarks bar
 3. Click **Copy to Clipboard**
 4. Right-click the bookmarks bar → **Add page** (or "Add bookmark")
@@ -66,7 +88,7 @@ All files must be kept in the **same folder** on the stream PC.
 
 You only need to do this once. The bookmark works on any game going forward.
 
-### 2. Add Browser Sources in Streamlabs
+### 3. Add Browser Sources in Streamlabs
 
 Add five Browser Sources across your scenes. For each one, paste the following into the **Custom CSS** field in the Browser Source properties to ensure transparency works correctly:
 
@@ -79,14 +101,14 @@ body { background-color: rgba(0, 0, 0, 0) !important; }
 | Scoreboard | `http://localhost:3000/scoreboard` | 1920 | 1080 | Main / Live |
 | Lower Third | `http://localhost:3000/lowerthird` | 1920 | 1080 | Main / Live |
 | Lineup | `http://localhost:3000/lineup` | 1920 | 1080 | Main / Live |
-| Starting Soon | `http://localhost:3000/startingsoon?kickoff=HH:MM` | 1920 | 1080 | Starting Soon |
+| Starting Soon | `http://localhost:3000/startingsoon` | 1920 | 1080 | Starting Soon |
 | BRB | `http://localhost:3000/brb` | 1920 | 1080 | BRB |
 
 > The scoreboard positions itself in the **top-left corner** automatically. Set all sources to 1920×1080 and let the overlay handle positioning.
 
-> For the Starting Soon overlay, replace `HH:MM` in the URL with the actual kickoff time (e.g. `?kickoff=14:30`). Update this in the Browser Source properties before each game.
+> The kickoff time for the Starting Soon overlay is set from the controller (Overlays card → Kickoff time field) — no need to edit the URL in Streamlabs.
 
-### 3. Streamlabs output settings
+### 4. Streamlabs output settings
 
 Choose the hardware encoder that matches your GPU for best performance:
 
@@ -111,7 +133,7 @@ All five Browser Sources can live in a **single scene** — overlay visibility i
 
 For any Browser Source you never want running in the background, right-click → Properties → tick **"Shutdown source when not visible"** to reduce GPU load.
 
-### 4. Audio Setup
+### 5. Audio Setup
 
 The overlays play royalty-free audio effects that fade in and out in sync with the visual transitions:
 
@@ -144,41 +166,15 @@ Browser Source audio does not appear in the mixer by default. For each Browser S
 
 ### Step 1 — Start the server
 
-Open a terminal (Command Prompt or PowerShell) in the folder containing the files and run:
+Double-click **`START MFCLIVE.bat`**.
 
-```
-npm start
-```
+The launcher checks for Node.js, cloudflared, and npm packages — installing anything missing automatically. The server starts in its own terminal window. After ~30 seconds the **game setup wizard opens in your browser** automatically once the Cloudflare tunnel is ready.
 
-(You can also run `node server.js` directly if you prefer.)
-
-You should see:
-
-```
-✅  MFCLIVE — Overlay Server  (port 3000)
-
-   ── Open this on your phone ──
-   Controller    →  http://192.168.1.x:3000/controller?token=abc123def456
-
-   ── Streamlabs Browser Sources (localhost — no token needed) ──
-   Scoreboard    →  http://localhost:3000/scoreboard
-   Lower Third   →  http://localhost:3000/lowerthird
-   Lineup        →  http://localhost:3000/lineup
-   Starting Soon →  http://localhost:3000/startingsoon
-   BRB           →  http://localhost:3000/brb
-```
-
-Leave this terminal open for the entire stream. To stop the server press **Ctrl+C**.
+Leave the server terminal open for the entire stream. To stop, close its window or press **Ctrl+C** inside it.
 
 ### Step 2 — Set the kickoff time
 
-In Streamlabs, right-click the **Starting Soon** Browser Source → Properties → update the URL with today's kickoff time:
-
-```
-http://localhost:3000/startingsoon?kickoff=14:30
-```
-
-Then click **Refresh**.
+In the game setup wizard, complete the pre-game setup (team names, lineups, kickoff time). The wizard will redirect you to the controller when done — or scan the QR code in the wizard's connection bar to open the controller on your phone.
 
 ### Step 3 — Check upload speed and set bitrate
 
@@ -198,22 +194,11 @@ Search "power plan" in the Start menu and select **Best Performance**. Plug in t
 
 ### Step 5 — Open the controller on your phone
 
-When the server starts it prints the full controller URL including a session token — look for the line that says **Open this on your phone**:
+The game setup wizard (which opens automatically) shows a QR code in the connection bar at the top. Scan it with your phone — the controller opens in the phone's browser. The QR points to a Cloudflare tunnel URL, so **the phone does not need to be on the same Wi-Fi** as the stream PC.
 
-```
-✅  MFCLIVE — Overlay Server  (port 3000)
+The token is baked into the QR URL and persists across restarts (stored in `~/.mfclive/token.txt`), so you only need to re-scan if you switch devices.
 
-   ── Open this on your phone ──
-   Controller  →  http://192.168.1.x:3000/controller?token=abc123def456
-
-   ── Streamlabs Browser Sources (no token needed) ──
-   Scoreboard  →  http://localhost:3000/scoreboard
-   ...
-```
-
-Copy that full URL (including `?token=...`) and open it in Chrome on your phone. The token changes every time the server restarts, so if you restart mid-game you'll need to resend the URL to your phone.
-
-Both devices must be on the same Wi-Fi network. The Streamlabs Browser Sources always use `localhost` and do not need a token.
+> **Fallback:** If the Cloudflare tunnel is unavailable, the QR shows the local network URL. In that case the phone must be on the same Wi-Fi as the stream PC.
 
 ### Step 6 — Load the roster from FOGIS
 
@@ -383,16 +368,38 @@ Full-screen "We'll Be Right Back" overlay for unexpected breaks. Transparent bod
 
 ---
 
+## Cloudflare Tunnel
+
+MFCLIVE uses [Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) to make the controller accessible from any network — no port forwarding, no static IP, no account required.
+
+When the server starts, it spawns `cloudflared` in the background and waits for the tunnel to be fully registered at Cloudflare's edge (~30 seconds). Only then does the game setup wizard open and show the tunnel QR. The QR URL looks like:
+
+```
+https://random-words.trycloudflare.com/controller?token=...
+```
+
+The tunnel URL changes on every server restart (this is a Cloudflare limitation for account-less tunnels). The token in the URL is persistent.
+
+`cloudflared.exe` is downloaded automatically to the project folder by `START MFCLIVE.bat` if not already present. No installation or account needed.
+
+---
+
 ## Troubleshooting
 
 **Server won't start**
-Make sure Node.js is installed (`node --version` in terminal). Make sure you are running the command from the correct folder.
+Run `START MFCLIVE.bat` — it installs Node.js automatically if missing. If the bat file itself fails, check that you have internet access and that your antivirus is not blocking it.
+
+**Port already in use**
+`START MFCLIVE.bat` will detect this and ask if you want to kill the existing instance. Answer **Y** to restart cleanly.
 
 **Controller actions work but UI doesn't update (timer doesn't run on phone)**
-The EventSource connection is being blocked — this usually means the controller was opened without the token in the URL. Make sure you're using the full URL printed by the server at startup, including `?token=...`.
+The EventSource connection is being blocked — the controller was likely opened without the token in the URL. Scan the QR from the wizard's connection bar instead of typing the URL manually.
 
-**Controller won't load on phone**
-Confirm the PC and phone are on the same Wi-Fi. Check the PC's IP address with `ipconfig` (Windows) and use that IP in the URL. Check that Windows Firewall is not blocking port 3000.
+**Controller won't load on phone via tunnel**
+The wizard's connection bar shows the tunnel status. If the tunnel is unavailable, the phone must be on the same Wi-Fi as the stream PC. Check that `cloudflared.exe` is present in the project folder — re-running `START MFCLIVE.bat` will download it if missing.
+
+**Tunnel shows active but QR gives 404**
+A previous cloudflared named-tunnel config at `%USERPROFILE%\.cloudflared\config.yaml` may be interfering. Rename or delete that file and restart.
 
 **Bookmarklet gives an error**
 Make sure you are logged in to minfotboll.se and are on the actual game page (the URL must contain the game ID, e.g. `/1993474`). The server must be running. If the error mentions `file://`, you generated the bookmarklet by opening the HTML file directly — open `http://localhost:3000/bookmarklet` through the server instead, regenerate, and re-save the bookmark.
@@ -429,13 +436,13 @@ Restart the server — this was a known display bug that has since been fixed.
 
 ## Stopping the Server
 
-Press **Ctrl+C** in the terminal window. If you closed the terminal without stopping first, run:
+Close the **MFCLIVE Server** terminal window, or press **Ctrl+C** inside it. cloudflared is stopped automatically when the server exits.
+
+If the terminal was closed without stopping first:
 
 ```
 taskkill /F /IM node.exe
 ```
-
-This force-stops all Node processes on the PC.
 
 ---
 

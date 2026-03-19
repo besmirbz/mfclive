@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<!-- MFCLIVE | © 2025 Besmir Pepa -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MFCLIVE — Game Setup</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:       #050B18;
+  --card:     #0d1829;
+  --border:   rgba(61,130,246,.25);
+  --blue:     #3D82F6;
+  --blue-lt:  #7DB8F7;
+  --dim:      rgba(255,255,255,.4);
+  --dimmer:   rgba(255,255,255,.22);
+  --green:    #22c55e;
+  --red:      #ef4444;
+  --orange:   #f97316;
+}
+body {
+  background: var(--bg);
+  color: #fff;
+  font-family: -apple-system,'Helvetica Neue',Arial,sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 60px;
+}
+
+/* ── Header ── */
+.hdr { width:100%; max-width:680px; margin-bottom:28px; }
+.hdr-title { font-size:18px; font-weight:900; letter-spacing:.08em; color:var(--blue-lt); text-transform:uppercase; }
+.hdr-sub { font-size:12px; color:var(--dim); margin-top:3px; }
+
+/* ── Step indicator ── */
+.step-bar { display:flex; gap:0; width:100%; max-width:680px; margin-bottom:28px; }
+.step-pip {
+  flex:1; height:4px; background:rgba(61,130,246,.2); border-radius:2px;
+  margin-right:4px; transition:background .3s;
+}
+.step-pip:last-child { margin-right:0; }
+.step-pip.done    { background:var(--green); }
+.step-pip.active  { background:var(--blue); }
+
+.step-label {
+  width:100%; max-width:680px; margin-bottom:20px;
+  font-size:11px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--blue);
+}
+
+/* ── Cards ── */
+.card {
+  width:100%; max-width:680px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:22px;
+  margin-bottom:16px;
+}
+.card-title {
+  font-size:10px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--blue); margin-bottom:14px;
+}
+
+/* ── Form elements ── */
+label { font-size:12px; font-weight:700; color:var(--blue-lt); display:block; margin-bottom:5px; }
+input[type=text], input[type=time], input[type=number], select, textarea {
+  width:100%; background:#060e1c; border:1px solid rgba(61,130,246,.3);
+  color:#fff; border-radius:7px; padding:10px 13px; font-size:14px;
+  font-family:inherit; transition:border-color .15s;
+}
+input[type=text]:focus, input[type=time]:focus,
+input[type=number]:focus, select:focus, textarea:focus {
+  outline:none; border-color:var(--blue);
+}
+input[type=number] { -moz-appearance:textfield; }
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; }
+.hint { font-size:11px; color:var(--dimmer); margin-top:5px; line-height:1.5; }
+.field { margin-bottom:14px; }
+.field:last-child { margin-bottom:0; }
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.abbr-row { display:flex; gap:10px; }
+.abbr-row input:first-child { flex:1; }
+.abbr-row input:last-child  { width:96px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
+
+/* ── Buttons ── */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  border:none; border-radius:8px; padding:11px 20px;
+  font-size:14px; font-weight:800; font-family:inherit;
+  cursor:pointer; transition:background .15s, opacity .15s; letter-spacing:.03em;
+}
+.btn:disabled { opacity:.4; cursor:default; }
+.btn-primary { background:var(--blue); color:#fff; }
+.btn-primary:hover:not(:disabled) { background:#2d6fd4; }
+.btn-ghost { background:rgba(61,130,246,.12); color:var(--blue-lt); }
+.btn-ghost:hover:not(:disabled) { background:rgba(61,130,246,.22); }
+.btn-danger { background:rgba(239,68,68,.15); color:var(--red); }
+.btn-danger:hover:not(:disabled) { background:rgba(239,68,68,.25); }
+.btn-green { background:var(--green); color:#fff; }
+.btn-green:hover:not(:disabled) { background:#16a34a; }
+.btn-sm { padding:7px 13px; font-size:12px; border-radius:6px; }
+.btn-full { width:100%; }
+
+/* ── Nav row ── */
+.nav { display:flex; gap:10px; width:100%; max-width:680px; margin-top:8px; }
+.nav .spacer { flex:1; }
+
+/* ── Big choice buttons (Step 0) ── */
+.choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:4px; }
+.choice-btn {
+  background:#060e1c; border:2px solid var(--border);
+  border-radius:10px; padding:22px 16px; text-align:center;
+  cursor:pointer; transition:border-color .15s, background .15s;
+  font-family:inherit;
+}
+.choice-btn:hover { border-color:var(--blue); background:rgba(61,130,246,.06); }
+.choice-btn.selected { border-color:var(--blue); background:rgba(61,130,246,.1); }
+.choice-icon { font-size:28px; display:block; margin-bottom:8px; }
+.choice-label { font-size:13px; font-weight:800; color:#fff; display:block; margin-bottom:3px; }
+.choice-sub { font-size:11px; color:var(--dim); }
+
+/* ── FOGIS polling state ── */
+.fogis-waiting {
+  background:rgba(61,130,246,.07); border:1px solid rgba(61,130,246,.2);
+  border-radius:10px; padding:20px; text-align:center; margin-top:14px;
+}
+.spinner {
+  width:36px; height:36px; border:3px solid rgba(61,130,246,.2);
+  border-top-color:var(--blue); border-radius:50%;
+  animation:spin .8s linear infinite; margin:0 auto 14px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+.fogis-waiting h3 { font-size:15px; font-weight:800; color:var(--blue-lt); margin-bottom:6px; }
+.fogis-waiting p  { font-size:13px; color:var(--dim); line-height:1.6; }
+.fogis-success {
+  background:rgba(34,197,94,.07); border:1px solid rgba(34,197,94,.25);
+  border-radius:10px; padding:20px; text-align:center; margin-top:14px;
+}
+.fogis-success h3 { font-size:15px; font-weight:800; color:var(--green); margin-bottom:6px; }
+.fogis-success p  { font-size:13px; color:var(--dim); line-height:1.6; }
+
+/* ── Logo section ── */
+.logo-tabs { display:flex; gap:6px; margin-bottom:12px; }
+.logo-tab {
+  padding:6px 13px; border-radius:6px; font-size:12px; font-weight:700;
+  cursor:pointer; border:1px solid var(--border); background:transparent;
+  color:var(--dim); font-family:inherit; transition:all .15s;
+}
+.logo-tab.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+.logo-preview {
+  width:72px; height:72px; border-radius:8px; background:#060e1c;
+  border:1px solid var(--border); display:flex; align-items:center;
+  justify-content:center; overflow:hidden; flex-shrink:0;
+}
+.logo-preview img { width:100%; height:100%; object-fit:contain; }
+.logo-preview .no-logo { font-size:22px; color:var(--dimmer); }
+.logo-row { display:flex; gap:14px; align-items:center; }
+.logo-input-area { flex:1; }
+.file-drop {
+  border:2px dashed rgba(61,130,246,.3); border-radius:8px;
+  padding:18px; text-align:center; cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.file-drop:hover, .file-drop.over { border-color:var(--blue); background:rgba(61,130,246,.05); }
+.file-drop input[type=file] { display:none; }
+.file-drop-text { font-size:13px; color:var(--dim); }
+.file-drop-text strong { color:var(--blue-lt); }
+
+/* ── Lineup table ── */
+.lineup-section-label {
+  font-size:10px; font-weight:800; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--dimmer); margin:14px 0 8px;
+}
+.lineup-section-label:first-child { margin-top:0; }
+.lineup-sep {
+  border:none; border-top:1px dashed rgba(61,130,246,.2); margin:14px 0;
+}
+.player-row {
+  display:grid; grid-template-columns:52px 1fr auto auto;
+  gap:8px; align-items:center; margin-bottom:7px;
+}
+.player-row input[type=number] { text-align:center; padding:8px 6px; }
+.cap-wrap { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--dim); white-space:nowrap; }
+.cap-wrap input[type=checkbox] { width:15px; height:15px; accent-color:var(--blue); }
+.add-player-btn {
+  width:100%; margin-top:6px; padding:8px; border-radius:7px; border:1px dashed rgba(61,130,246,.35);
+  background:transparent; color:var(--blue-lt); font-size:13px; font-weight:700;
+  font-family:inherit; cursor:pointer; transition:all .15s;
+}
+.add-player-btn:hover { background:rgba(61,130,246,.08); border-color:var(--blue); }
+.lineup-preview {
+  background:#060e1c; border:1px solid var(--border); border-radius:8px;
+  padding:12px 14px; font-size:12px; color:var(--dim);
+  font-family:monospace; line-height:1.9; margin-top:14px; max-height:200px; overflow-y:auto;
+  white-space:pre;
+}
+
+/* ── Review ── */
+.review-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.review-team {
+  background:#060e1c; border:1px solid var(--border);
+  border-radius:10px; padding:16px; text-align:center;
+}
+.review-team-abbr { font-size:28px; font-weight:900; color:var(--blue-lt); letter-spacing:.06em; }
+.review-team-name { font-size:11px; color:var(--dim); margin-top:2px; }
+.review-logo { width:56px; height:56px; object-fit:contain; margin:8px auto 0; display:block; }
+.review-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(61,130,246,.1); font-size:13px; }
+.review-row:last-child { border-bottom:none; }
+.review-key { color:var(--dim); }
+.review-val { color:#fff; font-weight:700; }
+.review-lineup { font-size:11px; color:var(--dim); font-family:monospace; line-height:1.8; margin-top:8px; }
+
+/* ── Status messages ── */
+.msg { border-radius:8px; padding:10px 14px; font-size:13px; font-weight:700; margin-top:10px; }
+.msg-err  { background:rgba(239,68,68,.12);  color:var(--red);   border:1px solid rgba(239,68,68,.25); }
+.msg-ok   { background:rgba(34,197,94,.1);   color:var(--green); border:1px solid rgba(34,197,94,.25); }
+.msg-info { background:rgba(61,130,246,.1);  color:var(--blue-lt); border:1px solid rgba(61,130,246,.2); }
+
+/* ── Connection bar ── */
+.conn-bar {
+  width:100%; max-width:680px; margin-bottom:20px;
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  overflow:hidden; flex-shrink:0;
+}
+.conn-bar-header {
+  display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer;
+  user-select:none;
+}
+.conn-bar-header:hover { background:rgba(61,130,246,.05); }
+.conn-dot { width:8px; height:8px; border-radius:50%; background:rgba(61,130,246,.3); flex-shrink:0; }
+.conn-dot.ready  { background:var(--green); box-shadow:0 0 6px rgba(34,197,94,.5); }
+.conn-dot.local  { background:var(--orange); }
+.conn-label { font-size:12px; font-weight:700; color:var(--blue-lt); flex:1; }
+.conn-url   { font-size:11px; color:var(--dim); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:260px; }
+.conn-toggle { font-size:11px; color:var(--dimmer); flex-shrink:0; }
+.conn-body  { border-top:1px solid var(--border); padding:14px; display:flex; gap:16px; align-items:flex-start; }
+.conn-qr    { width:90px; height:90px; flex-shrink:0; background:#060e1c; border-radius:6px; display:flex; align-items:center; justify-content:center; }
+.conn-qr img { width:90px; height:90px; border-radius:6px; }
+.conn-qr-placeholder { font-size:11px; color:var(--dimmer); text-align:center; padding:8px; line-height:1.5; }
+.conn-info  { flex:1; }
+.conn-info-url { font-size:12px; font-family:monospace; color:#fff; word-break:break-all; margin-bottom:8px; }
+.conn-info-note { font-size:11px; color:var(--dim); line-height:1.5; margin-bottom:8px; }
+.conn-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* ── Misc ── */
+.hidden { display:none !important; }
+.skip-link { font-size:12px; color:var(--dimmer); text-decoration:underline; cursor:pointer; background:none; border:none; font-family:inherit; }
+.skip-link:hover { color:var(--dim); }
+.elapsed { font-size:11px; color:var(--dimmer); margin-top:6px; }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">⚽ MFCLIVE — Game Setup</div>
+  <div class="hdr-sub" id="hdrSub">Set up teams, lineups and match info before kick-off</div>
+</div>
+
+<!-- ── Connection bar ── -->
+<div class="conn-bar" id="connBar">
+  <div class="conn-bar-header" onclick="toggleConnBar()">
+    <div class="conn-dot" id="connDot"></div>
+    <span class="conn-label" id="connLabel">Controller link</span>
+    <span class="conn-url"  id="connUrlShort"></span>
+    <span class="conn-toggle" id="connToggle">▼</span>
+  </div>
+  <div class="conn-body hidden" id="connBody">
+    <div class="conn-qr" id="connQr">
+      <div class="conn-qr-placeholder" id="connQrPlaceholder">QR loading…</div>
+    </div>
+    <div class="conn-info">
+      <div class="conn-info-url" id="connInfoUrl">—</div>
+      <div class="conn-info-note" id="connInfoNote">Scan the QR or open this URL on your phone to access the controller.</div>
+      <div class="conn-actions">
+        <button class="btn btn-ghost btn-sm" onclick="copyConnUrl(this)">Copy URL</button>
+        <a class="btn btn-ghost btn-sm" id="connOpenLink" href="#" target="_blank">Open controller</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="step-bar" id="stepBar"></div>
+<div class="step-label" id="stepLabel"></div>
+
+<!-- ══════════ STEP 0: FOGIS ══════════ -->
+<div id="step0" class="hidden">
+  <div class="card">
+    <div class="card-title">Import from FOGIS</div>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:16px;line-height:1.6;">
+      If the game is registered on <strong style="color:#fff">minfotboll.se</strong>,
+      we can load teams and lineups automatically.
+    </p>
+
+    <div id="fogisChoice">
+      <div class="choice-grid">
+        <button class="choice-btn" id="btnFogisYes" onclick="fogisChoose('yes')">
+          <span class="choice-icon">🌐</span>
+          <span class="choice-label">Yes, on FOGIS</span>
+          <span class="choice-sub">Load teams &amp; lineups automatically</span>
+        </button>
+        <button class="choice-btn" id="btnFogisNo" onclick="fogisChoose('no')">
+          <span class="choice-icon">✏️</span>
+          <span class="choice-label">No — manual setup</span>
+          <span class="choice-sub">Enter everything yourself</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="fogisUrlArea" class="hidden" style="margin-top:16px;">
+      <div class="field">
+        <label>FOGIS game page URL</label>
+        <input type="text" id="fogisUrl" placeholder="https://minfotboll.se/Tavling/Matcher/..." />
+        <p class="hint">Paste the full URL of the game page on minfotboll.se</p>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-primary" onclick="fogisOpenTab()">Open tab &amp; wait for bookmarklet</button>
+        <button class="skip-link" onclick="fogisChoose('no')">← Change answer</button>
+      </div>
+
+      <div id="fogisWaiting" class="fogis-waiting hidden">
+        <div class="spinner"></div>
+        <h3>Waiting for bookmarklet…</h3>
+        <p>
+          In the new tab, click the <strong style="color:#fff">⚽ Load Roster</strong> bookmarklet.<br>
+          This screen will update automatically when done.
+        </p>
+        <div class="elapsed" id="fogisElapsed"></div>
+        <br>
+        <button class="skip-link" onclick="fogisCancel()">Cancel and enter manually</button>
+      </div>
+
+      <div id="fogisSuccess" class="fogis-success hidden">
+        <h3>✅ Roster loaded!</h3>
+        <p id="fogisSuccessMsg"></p>
+      </div>
+
+      <div id="fogisErr" class="msg msg-err hidden"></div>
+    </div>
+  </div>
+
+  <div id="fogisAlreadyLoaded" class="hidden">
+    <div class="card" style="border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.04);">
+      <div class="card-title" style="color:var(--green);">Roster already loaded</div>
+      <p id="fogisAlreadyMsg" style="font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:14px;"></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-green" onclick="fogisUseExisting()">Use this data</button>
+        <button class="btn btn-ghost" onclick="fogisChoose('yes')">Load a different game</button>
+        <button class="btn btn-ghost" onclick="goTo(1)">Edit manually instead</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ STEP 1: MATCH INFO ══════════ -->
+<div id="step1" class="hidden">
+  <div class="card">
+    <div class="card-title">Match details</div>
+    <div class="field">
+      <label>League / Competition</label>
+      <input type="text" id="league" placeholder="e.g. Futsal Allsvenskan" maxlength="100" />
+    </div>
+    <div class="field">
+      <label>Arena / Venue</label>
+      <input type="text" id="arena" placeholder="e.g. Malmö Arena" maxlength="100" />
+    </div>
+    <div class="field">
+      <label>Kick-off time</label>
+      <input type="time" id="kickoffTime" />
+      <p class="hint">Shown on the Starting Soon overlay</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ STEP 2: HOME TEAM ══════════ -->
+<div id="step2" class="hidden">
+  <div class="card">
+    <div class="card-title">Home team</div>
+
+    <div class="field">
+      <label>Full team name</label>
+      <div class="abbr-row">
+        <input type="text" id="homeFullName" placeholder="e.g. Malmö Futsal Club" maxlength="80" oninput="autoAbbr('home')" />
+        <input type="text" id="homeTeam" placeholder="Abbr." maxlength="6" oninput="this.value=this.value.toUpperCase()" />
+      </div>
+      <p class="hint">Abbreviation (max 6 chars) is shown on the scoreboard — auto-generated but editable.</p>
+    </div>
+
+    <div class="field">
+      <label>Team logo</label>
+      <div class="logo-tabs">
+        <button class="logo-tab active" onclick="setLogoTab('home','upload',this)">Upload file</button>
+        <button class="logo-tab" onclick="setLogoTab('home','url',this)">Paste URL</button>
+        <button class="logo-tab" onclick="setLogoTab('home','none',this)">No logo</button>
+      </div>
+      <div class="logo-row">
+        <div class="logo-preview" id="homeLogoPreview">
+          <span class="no-logo">🛡</span>
+        </div>
+        <div class="logo-input-area">
+          <div id="homeLogoUpload">
+            <div class="file-drop" id="homeFileDrop" onclick="document.getElementById('homeFileInput').click()"
+                 ondragover="fileDragOver(event,'homeFileDrop')" ondragleave="fileDragLeave('homeFileDrop')"
+                 ondrop="fileDrop(event,'home')">
+              <input type="file" id="homeFileInput" accept=".png,.jpg,.jpeg,.gif,.webp,.svg" onchange="fileSelected('home',this)">
+              <div class="file-drop-text"><strong>Click to choose</strong> or drag &amp; drop<br><span style="font-size:10px;">PNG, JPG, GIF, WebP, SVG — max 3 MB</span></div>
+            </div>
+          </div>
+          <div id="homeLogoUrl" class="hidden">
+            <input type="text" id="homeLogoUrlInput" placeholder="https://..." oninput="previewLogoUrl('home')" />
+            <p class="hint">Direct link to the team logo image</p>
+          </div>
+          <div id="homeLogoNone" class="hidden">
+            <p style="font-size:13px;color:var(--dim);padding:10px 0;">No logo — only the team abbreviation will be shown.</p>
+          </div>
+        </div>
+      </div>
+      <div id="homeLogoMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ STEP 3: AWAY TEAM ══════════ -->
+<div id="step3" class="hidden">
+  <div class="card">
+    <div class="card-title">Away team</div>
+
+    <div class="field">
+      <label>Full team name</label>
+      <div class="abbr-row">
+        <input type="text" id="awayFullName" placeholder="e.g. Göteborg FC" maxlength="80" oninput="autoAbbr('away')" />
+        <input type="text" id="awayTeam" placeholder="Abbr." maxlength="6" oninput="this.value=this.value.toUpperCase()" />
+      </div>
+      <p class="hint">Abbreviation (max 6 chars) shown on scoreboard — auto-generated but editable.</p>
+    </div>
+
+    <div class="field">
+      <label>Team logo</label>
+      <div class="logo-tabs">
+        <button class="logo-tab active" onclick="setLogoTab('away','upload',this)">Upload file</button>
+        <button class="logo-tab" onclick="setLogoTab('away','url',this)">Paste URL</button>
+        <button class="logo-tab" onclick="setLogoTab('away','none',this)">No logo</button>
+      </div>
+      <div class="logo-row">
+        <div class="logo-preview" id="awayLogoPreview">
+          <span class="no-logo">🛡</span>
+        </div>
+        <div class="logo-input-area">
+          <div id="awayLogoUpload">
+            <div class="file-drop" id="awayFileDrop" onclick="document.getElementById('awayFileInput').click()"
+                 ondragover="fileDragOver(event,'awayFileDrop')" ondragleave="fileDragLeave('awayFileDrop')"
+                 ondrop="fileDrop(event,'away')">
+              <input type="file" id="awayFileInput" accept=".png,.jpg,.jpeg,.gif,.webp,.svg" onchange="fileSelected('away',this)">
+              <div class="file-drop-text"><strong>Click to choose</strong> or drag &amp; drop<br><span style="font-size:10px;">PNG, JPG, GIF, WebP, SVG — max 3 MB</span></div>
+            </div>
+          </div>
+          <div id="awayLogoUrl" class="hidden">
+            <input type="text" id="awayLogoUrlInput" placeholder="https://..." oninput="previewLogoUrl('away')" />
+            <p class="hint">Direct link to the team logo image</p>
+          </div>
+          <div id="awayLogoNone" class="hidden">
+            <p style="font-size:13px;color:var(--dim);padding:10px 0;">No logo — only the team abbreviation will be shown.</p>
+          </div>
+        </div>
+      </div>
+      <div id="awayLogoMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ STEP 4: HOME LINEUP ══════════ -->
+<div id="step4" class="hidden">
+  <div class="card">
+    <div class="card-title">Home lineup — <span id="homeLineupTeamName">Home</span></div>
+
+    <div class="lineup-section-label">Starters</div>
+    <div id="homeStartersRows"></div>
+    <button class="add-player-btn" onclick="addPlayerRow('home','starter')">+ Add starter</button>
+
+    <hr class="lineup-sep">
+
+    <div class="lineup-section-label">Substitutes</div>
+    <div id="homeSubsRows"></div>
+    <button class="add-player-btn" onclick="addPlayerRow('home','sub')">+ Add substitute</button>
+
+    <div class="lineup-preview" id="homeLineupPreview">— no players yet —</div>
+  </div>
+</div>
+
+<!-- ══════════ STEP 5: AWAY LINEUP ══════════ -->
+<div id="step5" class="hidden">
+  <div class="card">
+    <div class="card-title">Away lineup — <span id="awayLineupTeamName">Away</span></div>
+
+    <div class="lineup-section-label">Starters</div>
+    <div id="awayStartersRows"></div>
+    <button class="add-player-btn" onclick="addPlayerRow('away','starter')">+ Add starter</button>
+
+    <hr class="lineup-sep">
+
+    <div class="lineup-section-label">Substitutes</div>
+    <div id="awaySubsRows"></div>
+    <button class="add-player-btn" onclick="addPlayerRow('away','sub')">+ Add substitute</button>
+
+    <div class="lineup-preview" id="awayLineupPreview">— no players yet —</div>
+  </div>
+</div>
+
+<!-- ══════════ STEP 6: REVIEW ══════════ -->
+<div id="step6" class="hidden">
+  <div class="card">
+    <div class="card-title">Review &amp; confirm</div>
+
+    <div class="review-grid" style="margin-bottom:16px;">
+      <div class="review-team">
+        <div class="review-team-abbr" id="rvHomeAbbr">—</div>
+        <div class="review-team-name" id="rvHomeName"></div>
+        <img class="review-logo hidden" id="rvHomeLogo" src="" alt="">
+        <div class="review-lineup" id="rvHomeLineup"></div>
+      </div>
+      <div class="review-team">
+        <div class="review-team-abbr" id="rvAwayAbbr">—</div>
+        <div class="review-team-name" id="rvAwayName"></div>
+        <img class="review-logo hidden" id="rvAwayLogo" src="" alt="">
+        <div class="review-lineup" id="rvAwayLineup"></div>
+      </div>
+    </div>
+
+    <div class="review-row"><span class="review-key">League</span><span class="review-val" id="rvLeague">—</span></div>
+    <div class="review-row"><span class="review-key">Arena</span><span class="review-val" id="rvArena">—</span></div>
+    <div class="review-row"><span class="review-key">Kick-off</span><span class="review-val" id="rvKickoff">—</span></div>
+
+    <div id="confirmMsg"></div>
+  </div>
+</div>
+
+<!-- ── Navigation ── -->
+<div class="nav" id="navRow">
+  <button class="btn btn-ghost" id="btnBack" onclick="goBack()">← Back</button>
+  <span class="spacer"></span>
+  <button class="btn btn-primary" id="btnNext" onclick="goNext()">Next →</button>
+</div>
+
+<script>
+const TOKEN = window._MFCLIVE_TOKEN || '';
+
+// ── State ──────────────────────────────────────────────────────────────────────
+const STEPS = [
+  { label: 'FOGIS import',  pip: true  },
+  { label: 'Match info',    pip: true  },
+  { label: 'Home team',     pip: true  },
+  { label: 'Away team',     pip: true  },
+  { label: 'Home lineup',   pip: true  },
+  { label: 'Away lineup',   pip: true  },
+  { label: 'Review',        pip: true  },
+];
+let currentStep = 0;
+
+// Collected data
+const data = {
+  league: '', arena: '', kickoffTime: '',
+  homeFullName: '', homeTeam: '', homeLogo: '', homeLogoMode: 'upload',
+  awayFullName: '', awayTeam: '', awayLogo: '', awayLogoMode: 'upload',
+  homeStarters: [], homeSubs: [],
+  awayStarters: [], awaySubs: [],
+};
+
+// Logo upload refs (returned from server)
+const logoRefs = { home: '', away: '' };
+
+// Lineup row counters
+let rowId = 0;
+
+// FOGIS polling
+let fogisPoller = null;
+let fogisSnapshot = '';
+let fogisElapsedSec = 0;
+let fogisElapsedTimer = null;
+
+// ── Connection bar ─────────────────────────────────────────────────────────────
+let _connUrl = '';
+let _connBarOpen = false;
+let _connPoller = null;
+
+function toggleConnBar() {
+  _connBarOpen = !_connBarOpen;
+  document.getElementById('connBody').classList.toggle('hidden', !_connBarOpen);
+  document.getElementById('connToggle').textContent = _connBarOpen ? '▲' : '▼';
+}
+
+function copyConnUrl(btn) {
+  if (!_connUrl) return;
+  navigator.clipboard.writeText(_connUrl).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = _connUrl; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  });
+  const orig = btn.textContent; btn.textContent = '✓ Copied!';
+  setTimeout(() => { btn.textContent = orig; }, 2000);
+}
+
+function updateConnBar(status) {
+  const hasTunnel = !!status.tunnelUrl;
+  const url = status.tunnelUrl || status.localUrl || '';
+  _connUrl = url;
+
+  const dot   = document.getElementById('connDot');
+  const label = document.getElementById('connLabel');
+  const short = document.getElementById('connUrlShort');
+  const infoUrl = document.getElementById('connInfoUrl');
+  const note    = document.getElementById('connInfoNote');
+  const link    = document.getElementById('connOpenLink');
+
+  dot.className   = 'conn-dot ' + (hasTunnel ? 'ready' : 'local');
+  label.textContent = hasTunnel ? 'Controller — remote access ready' : 'Controller — local network only';
+  short.textContent = url.replace(/^https?:\/\//, '').replace(/\/controller.*$/, '');
+  infoUrl.textContent = url;
+  link.href = url;
+  note.textContent = hasTunnel
+    ? 'Scan QR or open URL on any device — works outside local WiFi.'
+    : 'Tunnel connecting… URL works on local WiFi only for now.';
+
+  // QR
+  if (status.qrDataUrl) {
+    const qrEl = document.getElementById('connQr');
+    qrEl.innerHTML = `<img src="${status.qrDataUrl}" alt="QR">`;
+  }
+
+  // Stop polling once tunnel is ready
+  if (hasTunnel && _connPoller) { clearInterval(_connPoller); _connPoller = null; }
+}
+
+async function pollStatus() {
+  try {
+    const st = await fetch('/api/status', { headers: { 'X-MFCLIVE-Token': TOKEN } }).then(r => r.json());
+    updateConnBar(st);
+  } catch(e) { /* non-fatal */ }
+}
+
+function startConnBar() {
+  pollStatus();
+  // Poll every 3 s until tunnel URL arrives, then stop
+  _connPoller = setInterval(pollStatus, 3000);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+function headers() {
+  return { 'Content-Type': 'application/json', 'X-MFCLIVE-Token': TOKEN };
+}
+
+async function init() {
+  buildStepBar();
+  startConnBar();
+  try {
+    const st = await fetch('/api/state', { headers: { 'X-MFCLIVE-Token': TOKEN } }).then(r => r.json());
+    prefillFromState(st);
+    checkFogisAlreadyLoaded(st);
+  } catch(e) { /* non-fatal */ }
+  goTo(0);
+}
+
+function prefillFromState(st) {
+  if (st.league)      { data.league      = st.league;      document.getElementById('league').value      = st.league; }
+  if (st.arena)       { data.arena       = st.arena;       document.getElementById('arena').value       = st.arena; }
+  if (st.kickoffTime) { data.kickoffTime = st.kickoffTime; document.getElementById('kickoffTime').value = st.kickoffTime; }
+  if (st.homeTeam && st.homeTeam !== 'MFC')  { data.homeTeam = st.homeTeam; document.getElementById('homeTeam').value = st.homeTeam; }
+  if (st.awayTeam && st.awayTeam !== 'AWAY') { data.awayTeam = st.awayTeam; document.getElementById('awayTeam').value = st.awayTeam; }
+
+  if (st.homeLogo && !st.homeLogo.startsWith('__upload__')) {
+    data.homeLogo = st.homeLogo;
+    document.getElementById('homeLogoUrlInput').value = st.homeLogo;
+    setLogoTab('home', 'url', document.querySelector('#step2 .logo-tab:nth-child(2)'));
+    previewLogoUrl('home');
+  }
+  if (st.awayLogo && !st.awayLogo.startsWith('__upload__')) {
+    data.awayLogo = st.awayLogo;
+    document.getElementById('awayLogoUrlInput').value = st.awayLogo;
+    setLogoTab('away', 'url', document.querySelector('#step3 .logo-tab:nth-child(2)'));
+    previewLogoUrl('away');
+  }
+
+  // Pre-fill lineups from existing state
+  if (st.homeStarters && st.homeStarters.length) populateLineupRows('home', st.homeStarters, st.homeSubs || []);
+  else if (st.lineup && st.lineup.home && st.lineup.home.length) populateLineupFromFlat('home', st.lineup.home);
+  if (st.awayStarters && st.awayStarters.length) populateLineupRows('away', st.awayStarters, st.awaySubs || []);
+  else if (st.lineup && st.lineup.away && st.lineup.away.length) populateLineupFromFlat('away', st.lineup.away);
+}
+
+function checkFogisAlreadyLoaded(st) {
+  const hp = st.homePlayers || [];
+  if (hp.length > 0 && st.homeTeam !== 'MFC') {
+    const el = document.getElementById('fogisAlreadyLoaded');
+    const msg = document.getElementById('fogisAlreadyMsg');
+    el.classList.remove('hidden');
+    msg.textContent = `${st.homeTeam} vs ${st.awayTeam} · ${hp.length} home + ${(st.awayPlayers||[]).length} away players · ${st.arena || 'no arena'}`;
+  }
+}
+
+// ── Step bar ───────────────────────────────────────────────────────────────────
+function buildStepBar() {
+  const bar = document.getElementById('stepBar');
+  STEPS.forEach((s, i) => {
+    if (!s.pip) return;
+    const pip = document.createElement('div');
+    pip.className = 'step-pip';
+    pip.id = 'pip' + i;
+    bar.appendChild(pip);
+  });
+}
+
+function updateStepBar(step) {
+  STEPS.forEach((s, i) => {
+    if (!s.pip) return;
+    const pip = document.getElementById('pip' + i);
+    if (!pip) return;
+    pip.className = 'step-pip' + (i < step ? ' done' : i === step ? ' active' : '');
+  });
+  document.getElementById('stepLabel').textContent = `Step ${step + 1} of ${STEPS.length} — ${STEPS[step].label}`;
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+function goTo(step) {
+  STEPS.forEach((_, i) => { const el = document.getElementById('step' + i); if (el) el.classList.add('hidden'); });
+  currentStep = step;
+  const el = document.getElementById('step' + step);
+  if (el) el.classList.remove('hidden');
+  updateStepBar(step);
+  updateNav(step);
+  if (step === 4) { document.getElementById('homeLineupTeamName').textContent = data.homeTeam || 'Home'; refreshLineupPreview('home'); }
+  if (step === 5) { document.getElementById('awayLineupTeamName').textContent  = data.awayTeam || 'Away';  refreshLineupPreview('away');  }
+  if (step === 6) buildReview();
+  window.scrollTo(0, 0);
+}
+
+function updateNav(step) {
+  const btnBack = document.getElementById('btnBack');
+  const btnNext = document.getElementById('btnNext');
+  btnBack.classList.toggle('hidden', step === 0);
+  if (step === 6) {
+    btnNext.textContent = '🚀 Launch Game';
+    btnNext.className = 'btn btn-green';
+  } else {
+    btnNext.textContent = step === 5 ? 'Review →' : 'Next →';
+    btnNext.className = 'btn btn-primary';
+  }
+}
+
+function goBack() {
+  if (currentStep > 0) goTo(currentStep - 1);
+}
+
+async function goNext() {
+  if (!await validateAndSave(currentStep)) return;
+  if (currentStep < STEPS.length - 1) goTo(currentStep + 1);
+}
+
+// ── Validate & save each step ──────────────────────────────────────────────────
+async function validateAndSave(step) {
+  if (step === 0) return true; // navigation from step 0 handled separately
+
+  if (step === 1) {
+    data.league      = document.getElementById('league').value.trim();
+    data.arena       = document.getElementById('arena').value.trim();
+    data.kickoffTime = document.getElementById('kickoffTime').value.trim();
+    // Save to server
+    await action('set_game_info', { league: data.league, arena: data.arena, kickoffTime: data.kickoffTime });
+    return true;
+  }
+
+  if (step === 2) {
+    data.homeTeam     = document.getElementById('homeTeam').value.trim().toUpperCase();
+    data.homeFullName = document.getElementById('homeFullName').value.trim();
+    if (!data.homeTeam) { showStepErr(2, 'Enter a team abbreviation for the home team.'); return false; }
+    const logo = await resolveLogoForSave('home');
+    await action('set_game_info', { homeTeam: data.homeTeam, homeLogo: logo });
+    return true;
+  }
+
+  if (step === 3) {
+    data.awayTeam     = document.getElementById('awayTeam').value.trim().toUpperCase();
+    data.awayFullName = document.getElementById('awayFullName').value.trim();
+    if (!data.awayTeam) { showStepErr(3, 'Enter a team abbreviation for the away team.'); return false; }
+    const logo = await resolveLogoForSave('away');
+    await action('set_game_info', { awayTeam: data.awayTeam, awayLogo: logo });
+    return true;
+  }
+
+  if (step === 4) {
+    const lineup = buildLineupArray('home');
+    await action('set_lineup', { home: lineup });
+    return true;
+  }
+
+  if (step === 5) {
+    const lineup = buildLineupArray('away');
+    await action('set_lineup', { away: lineup });
+    return true;
+  }
+
+  if (step === 6) {
+    return await confirmGame();
+  }
+
+  return true;
+}
+
+function showStepErr(step, msg) {
+  // Simple alert for now — could be inline
+  alert(msg);
+}
+
+// ── API helpers ────────────────────────────────────────────────────────────────
+async function action(act, payload) {
+  try {
+    await fetch('/action', { method: 'POST', headers: headers(), body: JSON.stringify({ action: act, payload }) });
+  } catch(e) { console.warn('[wizard] action failed:', e.message); }
+}
+
+// ── Step 0: FOGIS ──────────────────────────────────────────────────────────────
+function fogisChoose(choice) {
+  document.getElementById('fogisAlreadyLoaded').classList.add('hidden');
+  const urlArea  = document.getElementById('fogisUrlArea');
+  const choiceEl = document.getElementById('fogisChoice');
+  document.getElementById('btnFogisYes').classList.toggle('selected', choice === 'yes');
+  document.getElementById('btnFogisNo').classList.toggle('selected',  choice === 'no');
+  if (choice === 'yes') {
+    urlArea.classList.remove('hidden');
+    choiceEl.classList.remove('hidden');
+  } else {
+    urlArea.classList.add('hidden');
+    goTo(1);
+  }
+}
+
+function fogisOpenTab() {
+  const rawUrl = document.getElementById('fogisUrl').value.trim();
+  const gameId = extractFogisId(rawUrl);
+  if (!gameId) {
+    document.getElementById('fogisErr').textContent = 'Could not find a game ID in that URL. Make sure you copied the full minfotboll.se game page URL.';
+    document.getElementById('fogisErr').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('fogisErr').classList.add('hidden');
+
+  // Snapshot current state signature so we can detect when it changes
+  fetch('/api/state', { headers: { 'X-MFCLIVE-Token': TOKEN } })
+    .then(r => r.json())
+    .then(st => {
+      fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
+      window.open(rawUrl, '_blank');
+      document.getElementById('fogisWaiting').classList.remove('hidden');
+      fogisElapsedSec = 0;
+      fogisElapsedTimer = setInterval(() => {
+        fogisElapsedSec++;
+        document.getElementById('fogisElapsed').textContent = `Waiting… ${fogisElapsedSec}s`;
+      }, 1000);
+      fogisPoller = setInterval(pollForRoster, 1500);
+    })
+    .catch(() => {
+      window.open(rawUrl, '_blank');
+      document.getElementById('fogisWaiting').classList.remove('hidden');
+      fogisPoller = setInterval(pollForRoster, 1500);
+    });
+}
+
+function extractFogisId(url) {
+  const m = url.match(/(\d{6,})/);
+  return m ? m[1] : null;
+}
+
+function pollForRoster() {
+  fetch('/api/state', { headers: { 'X-MFCLIVE-Token': TOKEN } })
+    .then(r => r.json())
+    .then(st => {
+      const sig = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
+      if (sig !== fogisSnapshot && (st.homePlayers || []).length > 0) {
+        fogisStopPolling();
+        fogisLoadSuccess(st);
+      }
+    })
+    .catch(() => { /* ignore transient errors */ });
+}
+
+function fogisStopPolling() {
+  if (fogisPoller)      { clearInterval(fogisPoller);      fogisPoller      = null; }
+  if (fogisElapsedTimer){ clearInterval(fogisElapsedTimer); fogisElapsedTimer = null; }
+  document.getElementById('fogisWaiting').classList.add('hidden');
+}
+
+function fogisLoadSuccess(st) {
+  const hp = (st.homePlayers  || []).length;
+  const ap = (st.awayPlayers  || []).length;
+  document.getElementById('fogisSuccess').classList.remove('hidden');
+  document.getElementById('fogisSuccessMsg').textContent =
+    `${st.homeTeam} vs ${st.awayTeam} · ${hp} home + ${ap} away players · ${st.arena || ''}`;
+  prefillFromState(st);
+  // Auto-advance after 2 seconds
+  setTimeout(() => goTo(1), 2000);
+}
+
+function fogisCancel() {
+  fogisStopPolling();
+  document.getElementById('fogisWaiting').classList.add('hidden');
+  document.getElementById('fogisSuccess').classList.add('hidden');
+  goTo(1);
+}
+
+function fogisUseExisting() {
+  goTo(1);
+}
+
+// ── Abbreviation auto-generator ────────────────────────────────────────────────
+function autoAbbr(side) {
+  const full = document.getElementById(side + 'FullName').value.trim();
+  const abbr = generateAbbr(full);
+  document.getElementById(side + 'Team').value = abbr;
+}
+
+function generateAbbr(name) {
+  if (!name) return '';
+  const KEEP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','ifk','iff','fik']);
+  return name.trim().split(/\s+/)
+    .map(w => (KEEP.has(w.toLowerCase()) || (w === w.toUpperCase() && w.length <= 4))
+      ? w.toUpperCase() : w[0].toUpperCase())
+    .join('').slice(0, 6);
+}
+
+// ── Logo handling ──────────────────────────────────────────────────────────────
+function setLogoTab(side, mode, btn) {
+  data[side + 'LogoMode'] = mode;
+  // Update tab buttons
+  const tabs = btn.closest('.logo-tabs').querySelectorAll('.logo-tab');
+  tabs.forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  // Show/hide panels
+  document.getElementById(side + 'LogoUpload').classList.toggle('hidden', mode !== 'upload');
+  document.getElementById(side + 'LogoUrl').classList.toggle('hidden',    mode !== 'url');
+  document.getElementById(side + 'LogoNone').classList.toggle('hidden',   mode !== 'none');
+  if (mode === 'none') {
+    data[side + 'Logo'] = '';
+    logoRefs[side] = '';
+    setLogoPreview(side, '');
+  }
+}
+
+function fileDragOver(e, dropId) { e.preventDefault(); document.getElementById(dropId).classList.add('over'); }
+function fileDragLeave(dropId)   { document.getElementById(dropId).classList.remove('over'); }
+function fileDrop(e, side) {
+  e.preventDefault();
+  fileDragLeave(side + 'FileDrop');
+  const file = e.dataTransfer.files[0];
+  if (file) handleLogoFile(side, file);
+}
+function fileSelected(side, input) {
+  if (input.files[0]) handleLogoFile(side, input.files[0]);
+}
+
+function handleLogoFile(side, file) {
+  const msgEl = document.getElementById(side + 'LogoMsg');
+  if (file.size > 3 * 1024 * 1024) { msgEl.innerHTML = '<div class="msg msg-err">File too large (max 3 MB)</div>'; return; }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const dataUrl = e.target.result;
+    setLogoPreview(side, dataUrl); // instant local preview
+    msgEl.innerHTML = '<div class="msg msg-info">Uploading…</div>';
+    try {
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      const res = await fetch('/upload-logo', {
+        method: 'POST', headers: headers(),
+        body: JSON.stringify({ side, filename: file.name, data: dataUrl })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || res.status);
+      logoRefs[side] = json.ref;
+      data[side + 'Logo'] = json.ref;
+      msgEl.innerHTML = '<div class="msg msg-ok">✓ Logo uploaded</div>';
+    } catch(err) {
+      msgEl.innerHTML = `<div class="msg msg-err">Upload failed: ${err.message}</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function previewLogoUrl(side) {
+  const url = document.getElementById(side + 'LogoUrlInput').value.trim();
+  data[side + 'Logo'] = url;
+  setLogoPreview(side, url);
+}
+
+function setLogoPreview(side, src) {
+  const el = document.getElementById(side + 'LogoPreview');
+  if (src) {
+    el.innerHTML = `<img src="${src}" alt="logo" onerror="this.parentElement.innerHTML='<span class=no-logo>🛡</span>'">`;
+  } else {
+    el.innerHTML = '<span class="no-logo">🛡</span>';
+  }
+}
+
+async function resolveLogoForSave(side) {
+  const mode = data[side + 'LogoMode'];
+  if (mode === 'none') return '';
+  if (mode === 'upload') return logoRefs[side] || '';
+  if (mode === 'url') return document.getElementById(side + 'LogoUrlInput').value.trim();
+  return '';
+}
+
+// ── Lineup rows ────────────────────────────────────────────────────────────────
+function addPlayerRow(side, role) {
+  const containerId = side + (role === 'starter' ? 'StartersRows' : 'SubsRows');
+  const container = document.getElementById(containerId);
+  const id = rowId++;
+  const row = document.createElement('div');
+  row.className = 'player-row';
+  row.dataset.id = id;
+  row.innerHTML = `
+    <input type="number" min="1" max="99" placeholder="#" oninput="refreshLineupPreview('${side}')">
+    <input type="text" placeholder="Player name" maxlength="60" oninput="refreshLineupPreview('${side}')">
+    <label class="cap-wrap"><input type="checkbox" onchange="refreshLineupPreview('${side}')"> C</label>
+    <button class="btn btn-danger btn-sm" onclick="removeRow(this,'${side}')">✕</button>`;
+  container.appendChild(row);
+  refreshLineupPreview(side);
+}
+
+function removeRow(btn, side) {
+  btn.closest('.player-row').remove();
+  refreshLineupPreview(side);
+}
+
+function getRowsData(containerId) {
+  return Array.from(document.getElementById(containerId).querySelectorAll('.player-row')).map(row => {
+    const inputs = row.querySelectorAll('input');
+    const num  = parseInt(inputs[0].value) || 0;
+    const name = inputs[1].value.trim();
+    const cap  = inputs[2].checked;
+    return { num, name, cap };
+  }).filter(p => p.name || p.num);
+}
+
+function buildLineupArray(side) {
+  const starters = getRowsData(side + 'StartersRows')
+    .sort((a,b) => a.num - b.num)
+    .map(p => `#${p.num} ${p.name}${p.cap ? ' (C)' : ''}`);
+  const subs = getRowsData(side + 'SubsRows')
+    .sort((a,b) => a.num - b.num)
+    .map(p => `#${p.num} ${p.name}${p.cap ? ' (C)' : ''}`);
+  return subs.length ? [...starters, '--- Substitutes ---', ...subs] : starters;
+}
+
+function refreshLineupPreview(side) {
+  const arr = buildLineupArray(side);
+  const el  = document.getElementById(side + 'LineupPreview');
+  el.textContent = arr.length ? arr.join('\n') : '— no players yet —';
+}
+
+function populateLineupRows(side, starters, subs) {
+  // Clear first — safe to call multiple times (e.g. init + fogisLoadSuccess)
+  document.getElementById(side + 'StartersRows').innerHTML = '';
+  document.getElementById(side + 'SubsRows').innerHTML = '';
+  // Deduplicate: if the same jersey number appears in both arrays (FOGIS generic roster),
+  // keep the player only in starters and drop them from subs.
+  const starterNums = new Set(
+    starters.map(l => { const m = l.match(/^#(\d+)/); return m ? m[1] : null; }).filter(Boolean)
+  );
+  const dedupedSubs = subs.filter(l => {
+    const m = l.match(/^#(\d+)/);
+    return !m || !starterNums.has(m[1]);
+  });
+  starters.forEach(line  => addPlayerRowFromLine(side, 'starter', line));
+  dedupedSubs.forEach(line => addPlayerRowFromLine(side, 'sub',   line));
+  refreshLineupPreview(side);
+}
+
+function populateLineupFromFlat(side, flat) {
+  const SEP = /^---/;
+  const sepIdx = flat.findIndex(l => SEP.test(l.trim()));
+  const starters = (sepIdx === -1 ? flat : flat.slice(0, sepIdx)).filter(Boolean);
+  const subs     = sepIdx === -1 ? [] : flat.slice(sepIdx + 1).filter(Boolean);
+  populateLineupRows(side, starters, subs);
+}
+
+function addPlayerRowFromLine(side, role, line) {
+  const cap   = line.includes(' (C)');
+  const clean = line.replace(' (C)', '').trim();
+  if (!clean.startsWith('#')) return;
+  const sp   = clean.indexOf(' ');
+  const num  = sp > 0 ? parseInt(clean.slice(1, sp)) || 0 : 0;
+  const name = sp > 0 ? clean.slice(sp + 1).trim() : '';
+  const containerId = side + (role === 'starter' ? 'StartersRows' : 'SubsRows');
+  const container = document.getElementById(containerId);
+  const id = rowId++;
+  const row = document.createElement('div');
+  row.className = 'player-row';
+  row.dataset.id = id;
+  row.innerHTML = `
+    <input type="number" min="1" max="99" placeholder="#" value="${num || ''}" oninput="refreshLineupPreview('${side}')">
+    <input type="text" placeholder="Player name" maxlength="60" value="${name}" oninput="refreshLineupPreview('${side}')">
+    <label class="cap-wrap"><input type="checkbox" ${cap ? 'checked' : ''} onchange="refreshLineupPreview('${side}')"> C</label>
+    <button class="btn btn-danger btn-sm" onclick="removeRow(this,'${side}')">✕</button>`;
+  container.appendChild(row);
+}
+
+// ── Review ─────────────────────────────────────────────────────────────────────
+function buildReview() {
+  document.getElementById('rvHomeAbbr').textContent = data.homeTeam || '—';
+  document.getElementById('rvHomeName').textContent = data.homeFullName || '';
+  document.getElementById('rvAwayAbbr').textContent = data.awayTeam  || '—';
+  document.getElementById('rvAwayName').textContent = data.awayFullName || '';
+  document.getElementById('rvLeague').textContent   = data.league    || '—';
+  document.getElementById('rvArena').textContent    = data.arena     || '—';
+  document.getElementById('rvKickoff').textContent  = data.kickoffTime || '—';
+
+  // Logos
+  const homeLogo = resolveLogoPreviewSrc('home');
+  const awayLogo = resolveLogoPreviewSrc('away');
+  setReviewLogo('rvHomeLogo', homeLogo);
+  setReviewLogo('rvAwayLogo', awayLogo);
+
+  // Lineups
+  document.getElementById('rvHomeLineup').textContent = buildLineupArray('home').join('\n') || '—';
+  document.getElementById('rvAwayLineup').textContent = buildLineupArray('away').join('\n') || '—';
+}
+
+function resolveLogoPreviewSrc(side) {
+  const mode = data[side + 'LogoMode'];
+  if (mode === 'upload') {
+    const img = document.querySelector('#' + side + 'LogoPreview img');
+    return img ? img.src : '';
+  }
+  if (mode === 'url') return document.getElementById(side + 'LogoUrlInput').value.trim();
+  return '';
+}
+
+function setReviewLogo(id, src) {
+  const el = document.getElementById(id);
+  if (src) { el.src = src; el.classList.remove('hidden'); }
+  else      { el.classList.add('hidden'); }
+}
+
+async function confirmGame() {
+  const msg = document.getElementById('confirmMsg');
+  msg.innerHTML = '<div class="msg msg-info">Saving…</div>';
+  try {
+    const homeLineup = buildLineupArray('home');
+    const awayLineup = buildLineupArray('away');
+    // Reset match state first (clears scores, timer, fouls, red cards, wasRestored flag).
+    // set_game_info and set_lineup overwrite team/lineup data immediately after.
+    await action('reset_game', {});
+    await action('set_game_info', {
+      homeTeam: data.homeTeam, awayTeam: data.awayTeam,
+      homeLogo: await resolveLogoForSave('home'),
+      awayLogo: await resolveLogoForSave('away'),
+      league: data.league, arena: data.arena, kickoffTime: data.kickoffTime,
+    });
+    await action('set_lineup', { home: homeLineup, away: awayLineup });
+    msg.innerHTML = '<div class="msg msg-ok">✅ Game saved! Redirecting to controller…</div>';
+    setTimeout(() => { window.location.href = '/controller?token=' + encodeURIComponent(TOKEN); }, 1500);
+    return false; // prevent goNext from advancing
+  } catch(e) {
+    msg.innerHTML = `<div class="msg msg-err">Save failed: ${e.message}</div>`;
+    return false;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

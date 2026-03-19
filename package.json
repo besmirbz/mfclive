@@ -10,5 +10,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

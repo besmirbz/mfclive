@@ -210,21 +210,25 @@ function renderRedCard(cellId, timerId, cards) {
   if (cards&&cards.length>0) { timerEl.textContent=fmt(cards[0].remainingMs); cell.classList.add('active'); }
   else { cell.classList.remove('active'); timerEl.textContent=''; }
 }
-let prevHome=0, prevAway=0;
-const es=new EventSource('/events');
-es.onmessage=e=>{
+let prevHome=null, prevAway=null;
+let _sseDelay=1000;
+function connectSSE(){
+  const es=new EventSource('/events');
+  es.onopen =()=>{ _sseDelay=1000; };
+  es.onerror=()=>{ es.close(); setTimeout(connectSSE,_sseDelay); _sseDelay=Math.min(_sseDelay*2,30000); };
+  es.onmessage=e=>{
   const d=JSON.parse(e.data);
   if(d.type!=='state') return;
   document.getElementById('homeName').textContent=d.homeTeam;
   document.getElementById('awayName').textContent=d.awayTeam;
   if(d.homeScore!==prevHome){
     const c=document.getElementById('homeScoreCell');
-    c.classList.remove('scored'); void c.offsetWidth; c.classList.add('scored');
+    if(!c._animating){c.classList.remove('scored');void c.offsetWidth;c.classList.add('scored');c._animating=true;c.addEventListener('animationend',()=>{c._animating=false;},{once:true});}
     prevHome=d.homeScore;
   }
   if(d.awayScore!==prevAway){
     const c=document.getElementById('awayScoreCell');
-    c.classList.remove('scored'); void c.offsetWidth; c.classList.add('scored');
+    if(!c._animating){c.classList.remove('scored');void c.offsetWidth;c.classList.add('scored');c._animating=true;c.addEventListener('animationend',()=>{c._animating=false;},{once:true});}
     prevAway=d.awayScore;
   }
   document.getElementById('homeScore').textContent=d.homeScore;
@@ -242,10 +246,12 @@ es.onmessage=e=>{
   if(d.homeLogo&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();hl.style.opacity=1;}
   if(d.awayLogo&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();al.style.opacity=1;}
   const sb=document.getElementById('sb');
-  const ovVisible = d.overlayVisible?.scoreboard !== false;
+  const ovVisible = (d.overlayVisible||{}).scoreboard !== false;
   if (ovVisible) { sb.classList.add('ready'); sb.classList.remove('ov-hidden'); }
   else           { sb.classList.add('ov-hidden'); }
-};
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>

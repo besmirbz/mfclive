@@ -158,7 +158,7 @@
 <div id="lt">
   <div class="lt-edge"></div>
   <div class="lt-team" id="ltTeam">
-    <img class="lt-team-logo" id="ltTeamLogo" src="" onerror="this.style.opacity=0.3" />
+    <img class="lt-team-logo" id="ltTeamLogo" src="" onerror="this.style.display='none'" />
     <span class="lt-team-name" id="ltTeamName"></span>
   </div>
   <div class="lt-body">
@@ -169,6 +169,7 @@
   <div class="lt-rcicon" id="ltRcIcon"></div>
 </div>
 <div class="lt-foot" id="ltFoot"></div>
+<script src="/audio-util.js"></script>
 <script>
 const THEMES = {
   goal:    { color: '#3D82F6', bg: 'rgba(61,130,246,0.88)',  line2: '#7DB8F7' },
@@ -225,11 +226,13 @@ function burstParticles(colors, count, spreadMult) {
     const tx  = Math.cos(angle) * dist;
     const ty  = Math.sin(angle) * dist - 70; // bias upward
     const rot = Math.random() * 720 - 360;
+    const dur = 550 + Math.random() * 550;
     p.animate([
       { transform: `translate(-50%,-50%) scale(1) rotate(0deg)`,                                          opacity: 1 },
       { transform: `translate(calc(-50% + ${tx}px),calc(-50% + ${ty}px)) scale(0) rotate(${rot}deg)`,    opacity: 0 }
-    ], { duration: 550 + Math.random() * 550, easing: 'ease-out', fill: 'forwards' })
+    ], { duration: dur, easing: 'ease-out', fill: 'forwards' })
       .onfinish = () => p.remove();
+    setTimeout(() => p.remove(), dur + 200);
   }
 }
 
@@ -264,31 +267,25 @@ function triggerRedCardFx() {
   setTimeout(() => ltEl.classList.remove('pulse-red'), 1100);
 }
 
-// ── Audio ─────────────────────────────────────────────────────────────────────
-function fadeAudio(audio, toVol, durationMs) {
-  clearInterval(audio._fadeTimer);
-  const steps = Math.max(1, Math.round(durationMs / 16));
-  const fromVol = audio.volume;
-  let step = 0;
-  audio._fadeTimer = setInterval(() => {
-    step++;
-    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
-    if (step >= steps) {
-      clearInterval(audio._fadeTimer);
-      if (toVol === 0) audio.pause();
-    }
-  }, durationMs / steps);
-}
 const goalAudio = new Audio('/audio/goal.mp3');
 const rcAudio   = new Audio('/audio/redcard-whistle.mp3');
 goalAudio.volume = 0;
 rcAudio.volume   = 0;
 
 // ── SSE ────────────────────────────────────────────────────────────────────────
+// Track previous lower-third content as a tuple so rapid show/hide/show with
+// the same event doesn't suppress effects, and a new event always fires even
+// if wasVisible is still true from the previous one (LT1-002).
+let _prevLTKey = '';
 let wasVisible = false;
 
-const es = new EventSource('/events');
-es.onmessage = e => {
+let _sseDelay = 1000;
+let _isInitialSync = false;
+function connectSSE() {
+  const es = new EventSource('/events');
+  es.onopen  = () => { _sseDelay = 1000; _isInitialSync = true; };
+  es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
+  es.onmessage = e => {
   const d = JSON.parse(e.data);
   if (d.type !== 'state') return;
   const lt   = document.getElementById('lt');
@@ -306,9 +303,13 @@ es.onmessage = e => {
     const logo  = document.getElementById('ltTeamLogo');
     const tname = document.getElementById('ltTeamName');
     if (team === 'home' || team === 'away') {
-      logo.src = '/logo/' + team;
+      if (logo.dataset.team !== team) {
+        logo.dataset.team = team;
+        logo.src = '/logo/' + team;
+      }
       tname.textContent = team === 'home' ? (d.homeTeam || '') : (d.awayTeam || '');
     } else {
+      logo.dataset.team = '';
       logo.src = '';
       tname.textContent = '';
     }
@@ -317,7 +318,11 @@ es.onmessage = e => {
     lt.classList.add('visible');
     foot.classList.add('visible');
 
-    if (!wasVisible) {
+    // Trigger effects only when this is a genuinely new event — compare the full
+    // event+team+line1 tuple instead of just the boolean (LT1-002 fix).
+    const ltKey = `${d.lowerThird.event}|${d.lowerThird.team}|${d.lowerThird.line1}`;
+    if (ltKey !== _prevLTKey && !_isInitialSync) {
+      _prevLTKey = ltKey;
       const ev = d.lowerThird.event;
       // Immediate flashes (no position dependency)
       if (ev === 'goal') {
@@ -331,29 +336,38 @@ es.onmessage = e => {
         if (ev === 'goal')    triggerGoalFx();
         if (ev === 'redcard') triggerRedCardFx();
       }, 580);
-      // Audio — fade in synced to slide-in transition
-      if (ev === 'goal') {
-        goalAudio.currentTime = 0;
-        goalAudio.volume = 0;
-        goalAudio.play().catch(() => {});
-        fadeAudio(goalAudio, 0.85, 250);
-      } else if (ev === 'redcard') {
-        rcAudio.currentTime = 0;
-        rcAudio.volume = 0;
-        rcAudio.play().catch(() => {});
-        fadeAudio(rcAudio, 0.85, 150);
-      }
+      // Audio — delayed to match slide-in so sound starts as graphic appears (LT1-001 fix).
+      // The CSS transition is 0.55s; start audio at 300ms so fade-in peaks at ~550ms.
+      setTimeout(() => {
+        if (ev === 'goal') {
+          goalAudio.currentTime = 0;
+          goalAudio.volume = 0;
+          goalAudio.play().catch(() => {});
+          fadeAudio(goalAudio, 0.85, 250);
+        } else if (ev === 'redcard') {
+          rcAudio.currentTime = 0;
+          rcAudio.volume = 0;
+          rcAudio.play().catch(() => {});
+          fadeAudio(rcAudio, 0.85, 150);
+        }
+      }, 300);
     }
 
     wasVisible = true;
   } else {
     lt.classList.remove('visible');
     foot.classList.remove('visible');
-    fadeAudio(goalAudio, 0, 500);
-    fadeAudio(rcAudio,   0, 500);
+    if (wasVisible) {
+      fadeAudio(goalAudio, 0, 500);
+      fadeAudio(rcAudio,   0, 500);
+    }
+    _prevLTKey = '';
     wasVisible = false;
   }
-};
+  _isInitialSync = false;
+  };
+}
+connectSSE();
 </script>
 </body>
 </html>
