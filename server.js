@@ -59,10 +59,11 @@ function getLocalIP() {
 // Requires no account — generates a temporary *.trycloudflare.com URL per session.
 // We wait for cloudflared's "registered" log line before advertising the URL,
 // because cloudflared prints the URL *before* the edge connection is fully ready.
-let _tunnelUrl   = '';
-let _tunnelProc  = null;
+let _tunnelUrl    = '';
+let _tunnelProc   = null;
+let _tunnelStatus = 'unavailable'; // 'connecting' | 'ready' | 'failed' | 'unavailable'
 
-function startCloudflaredTunnel(port, onUrl) {
+function startCloudflaredTunnel(port, onUrl, onFail) {
   const { spawn, spawnSync } = require('child_process');
   const candidates = [
     'cloudflared',
@@ -75,9 +76,10 @@ function startCloudflaredTunnel(port, onUrl) {
     const r = spawnSync(c, ['--version'], { stdio: 'ignore', timeout: 3000 });
     if (!r.error && r.status === 0) { bin = c; break; }
   }
-  if (!bin) { console.log('   [tunnel] cloudflared not found — skipping tunnel'); return false; }
+  if (!bin) { console.log('   [tunnel] cloudflared not found — skipping tunnel'); _tunnelStatus = 'unavailable'; return false; }
 
   console.log('   [tunnel] starting cloudflared…');
+  _tunnelStatus = 'connecting';
   // Write a minimal blank config so cloudflared ignores any pre-existing
   // ~/.cloudflared/config.yaml (which may have named-tunnel ingress rules
   // with a catch-all http_status:404 that overrides our --url argument).
@@ -91,7 +93,10 @@ function startCloudflaredTunnel(port, onUrl) {
     });
   } catch(e) { console.warn('   [tunnel] failed to spawn cloudflared:', e.message); return; }
 
-  const urlRe        = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
+  // Real quick-tunnel subdomains always contain hyphens (e.g. silver-trying-portland-sometime).
+  // Requiring at least one hyphen prevents matching Cloudflare API domains like api.trycloudflare.com
+  // that appear in error responses when the tunnel fails.
+  const urlRe        = /https:\/\/[a-z0-9][a-z0-9-]*-[a-z0-9][a-z0-9-]*\.trycloudflare\.com/;
   // Matches cloudflared's "Registered tunnel connection connIndex=0" line.
   // After seeing this we wait PROPAGATION_DELAY for Cloudflare's routing to
   // propagate to all edge POPs — probing from our own machine is unreliable
@@ -102,10 +107,13 @@ function startCloudflaredTunnel(port, onUrl) {
 
   let capturedUrl   = null;
   let fallbackTimer = null;
+  let advertiseTimer = null;
+  let dead          = false; // set true if cloudflared exits with an error
 
   function advertise() {
-    if (_tunnelUrl || !capturedUrl) return;
+    if (_tunnelUrl || !capturedUrl || dead) return;
     _tunnelUrl = capturedUrl;
+    _tunnelStatus = 'ready';
     onUrl(_tunnelUrl);
   }
 
@@ -124,7 +132,7 @@ function startCloudflaredTunnel(port, onUrl) {
     if (capturedUrl && !_tunnelUrl && registeredRe.test(str)) {
       clearTimeout(fallbackTimer);
       console.log(`   [tunnel] registered — waiting ${PROPAGATION_DELAY / 1000}s for global propagation…`);
-      setTimeout(advertise, PROPAGATION_DELAY);
+      advertiseTimer = setTimeout(advertise, PROPAGATION_DELAY);
     }
   }
 
@@ -132,7 +140,14 @@ function startCloudflaredTunnel(port, onUrl) {
   _tunnelProc.stderr.on('data', handle);
   _tunnelProc.on('error', e => console.warn('   [tunnel] cloudflared error:', e.message));
   _tunnelProc.on('exit', code => {
-    if (code !== 0 && code !== null) console.warn(`   [tunnel] cloudflared exited (code ${code})`);
+    if (code !== 0 && code !== null) {
+      dead = true;
+      clearTimeout(fallbackTimer);
+      clearTimeout(advertiseTimer);
+      _tunnelStatus = 'failed';
+      console.warn(`   [tunnel] cloudflared exited (code ${code})`);
+      if (!_tunnelUrl && onFail) onFail(); // tunnel never came up — trigger fallback
+    }
     if (_tunnelUrl) { _tunnelUrl = ''; console.log('   [tunnel] tunnel disconnected'); }
   });
 
@@ -234,6 +249,7 @@ const state = {
 // restart mid-match can recover scores, timer, fouls, lineups, etc.
 const STATE_FILE = path.join(os.homedir(), '.mfclive', 'state.json');
 const LOGOS_DIR  = path.join(os.homedir(), '.mfclive', 'logos');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 function saveState() {
   const snapshot = {
@@ -726,11 +742,12 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     const tunnelControllerUrl = _tunnelUrl ? `${_tunnelUrl}/controller?token=${SECRET}` : null;
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     res.end(JSON.stringify({
-      localUrl:   localControllerUrl,
-      tunnelUrl:  tunnelControllerUrl,
-      qrDataUrl:  _qrDataUrl,
-      club:       config.club || 'MFCLIVE',
-      port:       PORT,
+      localUrl:     localControllerUrl,
+      tunnelUrl:    tunnelControllerUrl,
+      tunnelStatus: _tunnelStatus,
+      qrDataUrl:    _qrDataUrl,
+      club:         config.club || 'MFCLIVE',
+      port:         PORT,
     }));
     return;
   }
@@ -874,17 +891,17 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     '/controller':    'controller.html',
     '/bookmarklet':   'bookmarklet.html',
     '/game-setup':    'wizard.html',
-    '/scoreboard':    'overlay-scoreboard.html',
-    '/lowerthird':    'overlay-lowerthird.html',
-    '/lineup':        'overlay-lineup.html',
-    '/brb':           'overlay-brb.html',
-    '/startingsoon':  'overlay-startingsoon.html',
+    '/scoreboard':    'overlays/overlay-scoreboard.html',
+    '/lowerthird':    'overlays/overlay-lowerthird.html',
+    '/lineup':        'overlays/overlay-lineup.html',
+    '/brb':           'overlays/overlay-brb.html',
+    '/startingsoon':  'overlays/overlay-startingsoon.html',
     '/audio-util.js': 'audio-util.js',
   };
   const jsFiles = new Set(['audio-util.js']);
   const file = fileMap[route];
   if (file) {
-    const fp = path.join(__dirname, file);
+    const fp = path.join(PUBLIC_DIR, file);
     if (fs.existsSync(fp)) {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject session token into controller and bookmarklet
@@ -1012,18 +1029,25 @@ server.listen(PORT, '0.0.0.0', () => {
   // will show the tunnel QR as soon as it becomes available.
   openBrowser();
 
-  const tunnelStarting = startCloudflaredTunnel(PORT, tunnelBase => {
-    const tunnelControllerUrl = `${tunnelBase}/controller?token=${SECRET}`;
-    console.log(`\n   ☁  Tunnel ready — use this on your phone (any network):`);
-    console.log(`   Controller  →  ${tunnelBase}/controller?token=${maskedToken}\n`);
-    generateQR(tunnelControllerUrl);
-  });
-
-  if (!tunnelStarting) {
-    // No cloudflared — show local URL as fallback.
+  function showLocalFallback() {
     console.log(`\n   📡  No tunnel — phone must be on the same Wi-Fi:`);
     console.log(`   Controller  →  http://${localIP}:${PORT}/controller?token=${maskedToken}\n`);
     generateQR(controllerUrl);
+  }
+
+  const tunnelStarting = startCloudflaredTunnel(PORT,
+    tunnelBase => {
+      const tunnelControllerUrl = `${tunnelBase}/controller?token=${SECRET}`;
+      console.log(`\n   ☁  Tunnel ready — use this on your phone (any network):`);
+      console.log(`   Controller  →  ${tunnelBase}/controller?token=${maskedToken}\n`);
+      generateQR(tunnelControllerUrl);
+    },
+    showLocalFallback  // called if cloudflared starts but fails before advertising a URL
+  );
+
+  if (!tunnelStarting) {
+    // cloudflared not found at all — show local URL immediately.
+    showLocalFallback();
   }
 });
 
