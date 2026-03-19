@@ -89,7 +89,33 @@ if not exist "node_modules" (
 )
 
 :: ──────────────────────────────────────────────────────
-::  4. LAUNCH
+::  4. CHECK FOR EXISTING INSTANCE
+:: ──────────────────────────────────────────────────────
+set "MFCLIVE_PID="
+for /f "tokens=5" %%p in ('netstat -ano 2^>nul ^| findstr ":3000 " ^| findstr "LISTENING"') do (
+  if not defined MFCLIVE_PID set "MFCLIVE_PID=%%p"
+)
+
+if defined MFCLIVE_PID (
+  echo.
+  echo  [!!] MFCLIVE is already running ^(PID !MFCLIVE_PID!^).
+  echo.
+  choice /C YN /M "  Kill it and restart"
+  if errorlevel 2 (
+    echo.
+    echo  Cancelled. The existing server is still running.
+    echo.
+    pause
+    exit /b 0
+  )
+  taskkill /PID !MFCLIVE_PID! /F >nul 2>&1
+  echo  [OK] Old instance stopped.
+  :: Brief pause so the port is released before we re-bind
+  timeout /t 1 /nobreak >nul
+)
+
+:: ──────────────────────────────────────────────────────
+::  5. LAUNCH
 :: ──────────────────────────────────────────────────────
 echo.
 echo  All good - starting MFCLIVE...

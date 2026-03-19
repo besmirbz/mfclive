@@ -33,13 +33,20 @@ const MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : 
 // Prefers real WiFi/Ethernet adapters; skips virtual adapters (VirtualBox, VMware, WSL, etc.)
 function getLocalIP() {
   const ifaces = os.networkInterfaces();
-  const VIRTUAL  = /vmware|virtualbox|vbox|hyper.?v|wsl|loopback|bluetooth|hamachi|tap|tun|docker|teredo|isatap/i;
+  // Adapter name patterns that indicate virtual/non-routable interfaces.
+  // "host.?only" catches VirtualBox host-only adapters that Windows may name
+  // generically (e.g. "Ethernet 2") — matched on description, not address.
+  const VIRTUAL  = /vmware|virtualbox|vbox|hyper.?v|wsl|loopback|bluetooth|hamachi|tap|tun|docker|teredo|isatap|host.?only/i;
   const PREFERRED = /wi.?fi|wireless|wlan|ethernet|eth|local area/i;
+  // VirtualBox host-only default subnet (192.168.56.0/24). Filter by address
+  // as a belt-and-suspenders check when the adapter name isn't descriptive.
+  const VIRTUAL_SUBNET = /^192\.168\.56\./;
   let fallback = null;
   for (const [name, addrs] of Object.entries(ifaces)) {
     if (VIRTUAL.test(name)) continue;
     for (const iface of addrs) {
       if (iface.family !== 'IPv4' || iface.internal) continue;
+      if (VIRTUAL_SUBNET.test(iface.address)) continue;
       if (PREFERRED.test(name)) return iface.address;
       if (!fallback) fallback = iface.address;
     }
@@ -226,6 +233,7 @@ const state = {
 // Saves game state to ~/.mfclive/state.json after every action so a server
 // restart mid-match can recover scores, timer, fouls, lineups, etc.
 const STATE_FILE = path.join(os.homedir(), '.mfclive', 'state.json');
+const LOGOS_DIR  = path.join(os.homedir(), '.mfclive', 'logos');
 
 function saveState() {
   const snapshot = {
@@ -532,6 +540,16 @@ function handleAction(action, payload) {
       }
       break;
     }
+    case 'set_game_info':
+      if (payload.homeTeam    !== undefined) state.homeTeam    = String(payload.homeTeam).slice(0,6).toUpperCase();
+      if (payload.awayTeam    !== undefined) state.awayTeam    = String(payload.awayTeam).slice(0,6).toUpperCase();
+      if (payload.homeLogo    !== undefined) state.homeLogo    = String(payload.homeLogo    || '');
+      if (payload.awayLogo    !== undefined) state.awayLogo    = String(payload.awayLogo    || '');
+      if (payload.league      !== undefined) state.league      = String(payload.league      || '').slice(0,100);
+      if (payload.arena       !== undefined) state.arena       = String(payload.arena       || '').slice(0,100);
+      if (payload.kickoffTime !== undefined) state.kickoffTime = String(payload.kickoffTime || '').slice(0,5);
+      break;
+
     case 'set_team_names':
       if (payload.homeTeam) state.homeTeam = payload.homeTeam.slice(0,6).toUpperCase();
       if (payload.awayTeam) state.awayTeam = payload.awayTeam.slice(0,6).toUpperCase();
@@ -816,12 +834,46 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
 
 
 
-  // ── Serve HTML overlay files ────────────────────────────────────────────────
+  // ── Logo upload — base64 JSON upload from wizard ─────────────────────────────
+  if (req.method === 'POST' && route === '/upload-logo') {
+    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+      res.writeHead(415); res.end('Unsupported Media Type'); return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; if (body.length > 6 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+    req.on('end', () => {
+      try {
+        const { side, filename, data } = JSON.parse(body);
+        if (!['home','away'].includes(side)) throw new Error('Invalid side');
+        const ext = path.extname(String(filename || '')).toLowerCase();
+        if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
+        const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
+        const buf = Buffer.from(raw, 'base64');
+        if (buf.length > 3 * 1024 * 1024) throw new Error('File too large (max 3 MB)');
+        fs.mkdirSync(LOGOS_DIR, { recursive: true });
+        const safeName = side + '-' + Date.now() + ext;
+        fs.writeFileSync(path.join(LOGOS_DIR, safeName), buf);
+        const ref = '__upload__:' + safeName;
+        if (side === 'home') state.homeLogo = ref;
+        else                 state.awayLogo = ref;
+        broadcast(getPublicState());
+        saveState();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, ref }));
+      } catch(e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+    // ── Serve HTML overlay files ────────────────────────────────────────────────
   const fileMap = {
     '/':              'controller.html',
     '/controller':    'controller.html',
     '/bookmarklet':   'bookmarklet.html',
-    '/setup':         'setup.html',
+    '/game-setup':    'wizard.html',
     '/scoreboard':    'overlay-scoreboard.html',
     '/lowerthird':    'overlay-lowerthird.html',
     '/lineup':        'overlay-lineup.html',
@@ -836,16 +888,8 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     if (fs.existsSync(fp)) {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject session token into controller and bookmarklet
-      if (file === 'controller.html' || file === 'bookmarklet.html') {
+      if (file === 'controller.html' || file === 'bookmarklet.html' || file === 'wizard.html') {
         html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};</script>\n</head>`);
-      }
-      // Inject setup data (QR, URLs, club name) into setup page
-      if (file === 'setup.html') {
-        const localUrl   = `http://${getLocalIP()}:${PORT}/controller?token=${SECRET}`;
-        const tunnelUrl  = _tunnelUrl ? `${_tunnelUrl}/controller?token=${SECRET}` : null;
-        const controllerUrl = tunnelUrl || localUrl;
-        const setupData = { qrDataUrl: _qrDataUrl, controllerUrl, port: PORT, club: config.club || 'MFCLIVE' };
-        html = html.replace('</head>', `<script>window._SETUP=${JSON.stringify(setupData)};</script>\n</head>`);
       }
       const ct = jsFiles.has(file) ? 'application/javascript' : 'text/html';
       res.writeHead(200, { 'Content-Type': ct });
@@ -881,6 +925,16 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   if (route === '/logo/home' || route === '/logo/away') {
     const logoUrl = route === '/logo/home' ? state.homeLogo : state.awayLogo;
     if (!logoUrl) { res.writeHead(404); res.end('No logo set'); return; }
+    // Locally uploaded logos stored as __upload__:<filename>
+    if (logoUrl.startsWith('__upload__:')) {
+      const fname = path.basename(logoUrl.slice(11));
+      const fp = path.join(LOGOS_DIR, fname);
+      if (!fs.existsSync(fp)) { res.writeHead(404); res.end('Uploaded logo not found'); return; }
+      const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp' }[path.extname(fname).toLowerCase()] || 'image/png';
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' });
+      fs.createReadStream(fp).pipe(res);
+      return;
+    }
     if (!isSafeLogoUrl(logoUrl)) { res.writeHead(400); res.end('Invalid logo URL'); return; }
     const logoReq = https.get(logoUrl, { timeout: 5000 }, logoRes => {
       res.writeHead(200, {
@@ -918,25 +972,24 @@ server.listen(PORT, '0.0.0.0', () => {
   const controllerUrl = `http://${localIP}:${PORT}/controller?token=${SECRET}`;
 
   console.log(`\n✅  MFCLIVE — Overlay Server  (port ${PORT})`);
-  console.log(`\n   ── Setup page (open in browser on this PC) ──`);
-  console.log(`   Setup         →  http://localhost:${PORT}/setup`);
-  console.log(`\n   ── Open this on your phone ──`);
-  console.log(`   Controller    →  http://${localIP}:${PORT}/controller?token=${maskedToken}  (token masked — see token.txt)`);
-  console.log(`\n   ── Bookmarklet setup (open once to configure) ──`);
-  console.log(`   Bookmarklet   →  http://${localIP}:${PORT}/bookmarklet?token=${maskedToken}  (token masked — see token.txt)`);
-  console.log(`\n   ── Streamlabs Browser Sources (localhost — no token needed) ──`);
+  console.log(`\n   ── On this PC ──`);
+  console.log(`   Game Setup    →  http://localhost:${PORT}/game-setup  (opens automatically)`);
+  console.log(`   Bookmarklet   →  http://localhost:${PORT}/bookmarklet  (one-time FOGIS setup)`);
+  console.log(`\n   ── Streamlabs Browser Sources ──`);
   console.log(`   Scoreboard    →  http://localhost:${PORT}/scoreboard`);
   console.log(`   Lower Third   →  http://localhost:${PORT}/lowerthird`);
   console.log(`   Lineup        →  http://localhost:${PORT}/lineup`);
   console.log(`   Starting Soon →  http://localhost:${PORT}/startingsoon`);
   console.log(`   BRB           →  http://localhost:${PORT}/brb`);
+  console.log(`\n   ── On your phone ──`);
+  console.log(`   Waiting for Cloudflare tunnel (~30s)…  Scan QR in game setup wizard once ready.`);
   console.log('\n   Stop: Ctrl + C\n');
 
   // Opens the setup page in the default browser (Windows).
   function openBrowser() {
     try {
       const { spawn } = require('child_process');
-      spawn('cmd', ['/c', 'start', '', `http://localhost:${PORT}/setup`],
+      spawn('cmd', ['/c', 'start', '', `http://localhost:${PORT}/game-setup`],
         { detached: true, stdio: 'ignore', windowsHide: true });
     } catch(e) { /* non-fatal */ }
   }
@@ -955,18 +1008,22 @@ server.listen(PORT, '0.0.0.0', () => {
   // Start Cloudflare Quick Tunnel. Open the browser only when the tunnel is
   // ready so the setup page shows the tunnel QR immediately on load.
   // If cloudflared is unavailable, fall back to opening with the local URL.
+  // Open the wizard immediately — the connection bar polls /api/status and
+  // will show the tunnel QR as soon as it becomes available.
+  openBrowser();
+
   const tunnelStarting = startCloudflaredTunnel(PORT, tunnelBase => {
     const tunnelControllerUrl = `${tunnelBase}/controller?token=${SECRET}`;
-    console.log(`\n   ☁  Tunnel ready — works from any network:`);
-    console.log(`   Controller  →  ${tunnelBase}/controller?token=${SECRET.slice(0,2)}****${SECRET.slice(-2)}\n`);
+    console.log(`\n   ☁  Tunnel ready — use this on your phone (any network):`);
+    console.log(`   Controller  →  ${tunnelBase}/controller?token=${maskedToken}\n`);
     generateQR(tunnelControllerUrl);
-    openBrowser();
   });
 
   if (!tunnelStarting) {
-    // No cloudflared — generate local QR and open browser immediately.
+    // No cloudflared — show local URL as fallback.
+    console.log(`\n   📡  No tunnel — phone must be on the same Wi-Fi:`);
+    console.log(`   Controller  →  http://${localIP}:${PORT}/controller?token=${maskedToken}\n`);
     generateQR(controllerUrl);
-    openBrowser();
   }
 });
 

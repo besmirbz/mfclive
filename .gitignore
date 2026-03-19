@@ -2,3 +2,5 @@ token.txt
 node_modules/
 .claude/
 .claude_codereview*.md
+WIZARD_PLAN.md
+SESSION_SUMMARY.md

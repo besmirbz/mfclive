@@ -28,7 +28,7 @@ You run the controller on your phone during the game. You don't need to touch th
 | `START MFCLIVE.bat` | **Double-click to launch** — installs requirements automatically and starts the server |
 | `server.js` | The backend server — started automatically by the bat file |
 | `config.json` | Club configuration — name, keywords, port, half duration |
-| `setup.html` | Setup page — opens automatically in your browser after launch |
+| `wizard.html` | Game setup wizard — opens automatically in your browser after launch |
 | `controller.html` | The control panel — open on your phone/tablet via QR code |
 | `overlay-scoreboard.html` | Scoreboard overlay — add as Browser Source in Streamlabs |
 | `overlay-lineup.html` | Starting lineup overlay — add as Browser Source in Streamlabs |
@@ -168,13 +168,13 @@ Browser Source audio does not appear in the mixer by default. For each Browser S
 
 Double-click **`START MFCLIVE.bat`**.
 
-The launcher checks for Node.js, cloudflared, and npm packages — installing anything missing automatically. The server starts in its own terminal window. After ~30 seconds the **setup page opens in your browser** automatically once the Cloudflare tunnel is ready.
+The launcher checks for Node.js, cloudflared, and npm packages — installing anything missing automatically. The server starts in its own terminal window. After ~30 seconds the **game setup wizard opens in your browser** automatically once the Cloudflare tunnel is ready.
 
 Leave the server terminal open for the entire stream. To stop, close its window or press **Ctrl+C** inside it.
 
 ### Step 2 — Set the kickoff time
 
-On the setup page, scan the QR code to open the controller on your phone. In the controller, go to the **🎬 Overlays** card and enter the kickoff time in the **Kickoff time** field. The Starting Soon overlay countdown updates instantly.
+In the game setup wizard, complete the pre-game setup (team names, lineups, kickoff time). The wizard will redirect you to the controller when done — or scan the QR code in the wizard's connection bar to open the controller on your phone.
 
 ### Step 3 — Check upload speed and set bitrate
 
@@ -194,7 +194,7 @@ Search "power plan" in the Start menu and select **Best Performance**. Plug in t
 
 ### Step 5 — Open the controller on your phone
 
-The setup page (which opens automatically) shows a QR code. Scan it with your phone — the controller opens in the phone's browser. The QR points to a Cloudflare tunnel URL, so **the phone does not need to be on the same Wi-Fi** as the stream PC.
+The game setup wizard (which opens automatically) shows a QR code in the connection bar at the top. Scan it with your phone — the controller opens in the phone's browser. The QR points to a Cloudflare tunnel URL, so **the phone does not need to be on the same Wi-Fi** as the stream PC.
 
 The token is baked into the QR URL and persists across restarts (stored in `~/.mfclive/token.txt`), so you only need to re-scan if you switch devices.
 
@@ -372,7 +372,7 @@ Full-screen "We'll Be Right Back" overlay for unexpected breaks. Transparent bod
 
 MFCLIVE uses [Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) to make the controller accessible from any network — no port forwarding, no static IP, no account required.
 
-When the server starts, it spawns `cloudflared` in the background and waits for the tunnel to be fully registered at Cloudflare's edge (~30 seconds). Only then does the setup page open and show the tunnel QR. The QR URL looks like:
+When the server starts, it spawns `cloudflared` in the background and waits for the tunnel to be fully registered at Cloudflare's edge (~30 seconds). Only then does the game setup wizard open and show the tunnel QR. The QR URL looks like:
 
 ```
 https://random-words.trycloudflare.com/controller?token=...
@@ -390,13 +390,13 @@ The tunnel URL changes on every server restart (this is a Cloudflare limitation 
 Run `START MFCLIVE.bat` — it installs Node.js automatically if missing. If the bat file itself fails, check that you have internet access and that your antivirus is not blocking it.
 
 **Port already in use**
-Another MFCLIVE server is still running. Run `taskkill /F /IM node.exe` in a terminal to kill it, then try again.
+`START MFCLIVE.bat` will detect this and ask if you want to kill the existing instance. Answer **Y** to restart cleanly.
 
 **Controller actions work but UI doesn't update (timer doesn't run on phone)**
-The EventSource connection is being blocked — the controller was likely opened without the token in the URL. Scan the QR from the setup page instead of typing the URL manually.
+The EventSource connection is being blocked — the controller was likely opened without the token in the URL. Scan the QR from the wizard's connection bar instead of typing the URL manually.
 
 **Controller won't load on phone via tunnel**
-The setup page shows the tunnel status. If the tunnel is unavailable, the phone must be on the same Wi-Fi as the stream PC. Check that `cloudflared.exe` is present in the project folder — re-running `START MFCLIVE.bat` will download it if missing.
+The wizard's connection bar shows the tunnel status. If the tunnel is unavailable, the phone must be on the same Wi-Fi as the stream PC. Check that `cloudflared.exe` is present in the project folder — re-running `START MFCLIVE.bat` will download it if missing.
 
 **Tunnel shows active but QR gives 404**
 A previous cloudflared named-tunnel config at `%USERPROFILE%\.cloudflared\config.yaml` may be interfering. Rename or delete that file and restart.
