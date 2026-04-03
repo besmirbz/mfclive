@@ -76,8 +76,8 @@ input[type=text]:focus, input[type=time]:focus,
 input[type=number]:focus, select:focus, textarea:focus {
   outline:none; border-color:var(--blue);
 }
-input[type=number] { -moz-appearance:textfield; }
-input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; }
+input[type=number] { -moz-appearance:textfield; appearance:textfield; }
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appearance:none; }
 .hint { font-size:11px; color:var(--dimmer); margin-top:5px; line-height:1.5; }
 .field { margin-bottom:14px; }
 .field:last-child { margin-bottom:0; }
@@ -615,14 +615,24 @@ function updateConnBar(status) {
   const note    = document.getElementById('connInfoNote');
   const link    = document.getElementById('connOpenLink');
 
-  dot.className   = 'conn-dot ' + (hasTunnel ? 'ready' : 'local');
+  const tunnelFailed = !hasTunnel && (status.tunnelStatus === 'failed' || status.tunnelStatus === 'unavailable');
+
+  dot.className     = 'conn-dot ' + (hasTunnel ? 'ready' : 'local');
   label.textContent = hasTunnel ? 'Controller — remote access ready' : 'Controller — local network only';
   short.textContent = url.replace(/^https?:\/\//, '').replace(/\/controller.*$/, '');
   infoUrl.textContent = url;
   link.href = url;
-  note.textContent = hasTunnel
-    ? 'Scan QR or open URL on any device — works outside local WiFi.'
-    : 'Tunnel connecting… URL works on local WiFi only for now.';
+
+  if (hasTunnel) {
+    note.textContent = 'Scan QR or open URL on any device — works outside local WiFi.';
+    note.style.color = '';
+  } else if (tunnelFailed) {
+    note.textContent = '⚠️ Tunnel unavailable — controller only reachable on the same Wi-Fi. Consider using a personal hotspot for reliable access.';
+    note.style.color = 'var(--orange)';
+  } else {
+    note.textContent = 'Tunnel connecting… URL works on local WiFi only for now.';
+    note.style.color = '';
+  }
 
   // QR
   if (status.qrDataUrl) {
@@ -630,8 +640,8 @@ function updateConnBar(status) {
     qrEl.innerHTML = `<img src="${status.qrDataUrl}" alt="QR">`;
   }
 
-  // Stop polling once tunnel is ready
-  if (hasTunnel && _connPoller) { clearInterval(_connPoller); _connPoller = null; }
+  // Stop polling once tunnel is ready or has permanently failed
+  if ((hasTunnel || tunnelFailed) && _connPoller) { clearInterval(_connPoller); _connPoller = null; }
 }
 
 async function pollStatus() {
