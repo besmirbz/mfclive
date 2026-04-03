@@ -256,8 +256,66 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 <body>
 
 <div class="hdr">
-  <div class="hdr-title">⚽ MFCLIVE — Game Setup</div>
-  <div class="hdr-sub" id="hdrSub">Set up teams, lineups and match info before kick-off</div>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+    <div>
+      <div class="hdr-title" id="hdrTitle">⚽ MFCLIVE — Game Setup</div>
+      <div class="hdr-sub" id="hdrSub">Set up teams, lineups and match info before kick-off</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-top:2px;" onclick="toggleSettings()">⚙ Settings</button>
+  </div>
+</div>
+
+<!-- ── Club Settings panel (hidden by default) ── -->
+<div id="settingsPanel" class="hidden" style="width:100%;max-width:680px;margin-bottom:20px;">
+  <div class="card">
+    <div class="card-title">⚙ Club Settings</div>
+    <div class="field">
+      <label>Club Name</label>
+      <input type="text" id="settingClub" maxlength="60" placeholder="e.g. Malmö Futsal Club" />
+    </div>
+    <div class="field">
+      <label>Accent Colour</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="color" id="settingColour" style="width:48px;height:36px;padding:2px;border:1px solid rgba(61,130,246,.3);border-radius:6px;background:#060e1c;cursor:pointer;" />
+        <span id="settingColourHex" style="font-size:13px;color:var(--dim);font-family:monospace;">#3D82F6</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Club Logo</label>
+      <div class="logo-row">
+        <div class="logo-preview" id="clubLogoPreview" style="width:56px;height:56px;">
+          <img src="/logo/club" onerror="this.parentElement.innerHTML='<span class=no-logo>🏟</span>'" style="width:100%;height:100%;object-fit:contain;" />
+        </div>
+        <div class="logo-input-area">
+          <div class="file-drop" id="clubFileDrop"
+            ondragover="fileDragOver(event,'clubFileDrop')"
+            ondragleave="fileDragLeave('clubFileDrop')"
+            ondrop="clubLogoDrop(event)">
+            <div class="file-drop-text">
+              <strong>Drop image here</strong> or <label style="cursor:pointer;color:var(--blue);text-decoration:underline;">browse<input type="file" accept="image/*" style="display:none" onchange="clubLogoSelected(this)"></label>
+            </div>
+          </div>
+          <div id="clubLogoMsg"></div>
+        </div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>Number of Periods</label>
+        <input type="number" id="settingPeriods" min="1" max="10" placeholder="2" />
+        <p class="hint">e.g. 2 for halves, 4 for quarters</p>
+      </div>
+      <div class="field">
+        <label>Period Duration (min)</label>
+        <input type="number" id="settingDuration" min="1" max="90" placeholder="20" />
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn btn-primary" style="flex:1" onclick="saveSettings()">Save Settings</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleSettings()">Close</button>
+    </div>
+    <div id="settingsMsg" style="margin-top:8px;"></div>
+  </div>
 </div>
 
 <!-- ── Connection bar ── -->
@@ -663,6 +721,7 @@ function headers() {
 }
 
 async function init() {
+  applyBranding();
   buildStepBar();
   startConnBar();
   try {
@@ -673,12 +732,93 @@ async function init() {
   goTo(0);
 }
 
+// ── Branding ───────────────────────────────────────────────────────────────────
+function applyBranding() {
+  const cfg = window._MFCLIVE_CONFIG || {};
+  if (cfg.accentColour && /^#[0-9a-fA-F]{6}$/.test(cfg.accentColour)) {
+    const [r,g,b] = [1,3,5].map(i => parseInt(cfg.accentColour.slice(i,i+2), 16));
+    document.documentElement.style.setProperty('--blue',   cfg.accentColour);
+    document.documentElement.style.setProperty('--blue-lt',`rgba(${r},${g},${b},.85)`);
+    document.documentElement.style.setProperty('--border', `rgba(${r},${g},${b},.25)`);
+  }
+  if (cfg.club) {
+    const el = document.getElementById('hdrTitle');
+    if (el) el.textContent = '⚽ ' + cfg.club + ' — Game Setup';
+  }
+  // Pre-fill settings panel
+  const colourInput = document.getElementById('settingColour');
+  const colourHex   = document.getElementById('settingColourHex');
+  if (colourInput && cfg.accentColour) { colourInput.value = cfg.accentColour; colourHex.textContent = cfg.accentColour; }
+  if (document.getElementById('settingClub')     && cfg.club)            document.getElementById('settingClub').value     = cfg.club;
+  if (document.getElementById('settingPeriods')  && cfg.numberOfPeriods) document.getElementById('settingPeriods').value  = cfg.numberOfPeriods;
+  if (document.getElementById('settingDuration') && cfg.periodDuration)  document.getElementById('settingDuration').value = cfg.periodDuration;
+  if (colourInput) colourInput.addEventListener('input', () => { colourHex.textContent = colourInput.value; });
+}
+
+// ── Settings panel ─────────────────────────────────────────────────────────────
+function toggleSettings() {
+  document.getElementById('settingsPanel').classList.toggle('hidden');
+}
+
+async function saveSettings() {
+  const msgEl = document.getElementById('settingsMsg');
+  const club    = (document.getElementById('settingClub').value || '').trim();
+  const colour  = document.getElementById('settingColour').value;
+  const periods = parseInt(document.getElementById('settingPeriods').value, 10);
+  const dur     = parseInt(document.getElementById('settingDuration').value, 10);
+  const updates = {};
+  if (club)                                            updates.club            = club;
+  if (/^#[0-9a-fA-F]{6}$/.test(colour))               updates.accentColour    = colour;
+  if (!isNaN(periods) && periods >= 1 && periods <= 10) updates.numberOfPeriods = periods;
+  if (!isNaN(dur)     && dur >= 1     && dur <= 90)     updates.periodDuration  = dur;
+  if (!Object.keys(updates).length) { msgEl.innerHTML = '<div class="msg msg-err">Nothing to save.</div>'; return; }
+  msgEl.innerHTML = '<div class="msg msg-info">Saving…</div>';
+  try {
+    const r = await fetch('/api/config', { method: 'POST', headers: headers(), body: JSON.stringify(updates) });
+    const json = await r.json();
+    if (!r.ok) throw new Error((json.errors || [json.error]).join(', '));
+    msgEl.innerHTML = '<div class="msg msg-ok">✅ Settings saved. Reload the page to apply branding changes.</div>';
+    if (window._MFCLIVE_CONFIG) Object.assign(window._MFCLIVE_CONFIG, updates);
+    applyBranding();
+  } catch(e) {
+    msgEl.innerHTML = `<div class="msg msg-err">${e.message}</div>`;
+  }
+}
+
+// ── Club logo upload ────────────────────────────────────────────────────────────
+function clubLogoDrop(e) {
+  e.preventDefault(); fileDragLeave('clubFileDrop');
+  const file = e.dataTransfer.files[0];
+  if (file) handleClubLogoFile(file);
+}
+function clubLogoSelected(input) { if (input.files[0]) handleClubLogoFile(input.files[0]); }
+
+function handleClubLogoFile(file) {
+  const msgEl = document.getElementById('clubLogoMsg');
+  if (file.size > 3 * 1024 * 1024) { msgEl.innerHTML = '<div class="msg msg-err">File too large (max 3 MB)</div>'; return; }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const dataUrl = e.target.result;
+    document.getElementById('clubLogoPreview').innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;">`;
+    msgEl.innerHTML = '<div class="msg msg-info">Uploading…</div>';
+    try {
+      const r = await fetch('/upload-club-logo', { method: 'POST', headers: headers(), body: JSON.stringify({ filename: file.name, data: dataUrl }) });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || 'Upload failed');
+      msgEl.innerHTML = '<div class="msg msg-ok">✅ Club logo saved.</div>';
+    } catch(e) {
+      msgEl.innerHTML = `<div class="msg msg-err">${e.message}</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 function prefillFromState(st) {
   if (st.league)      { data.league      = st.league;      document.getElementById('league').value      = st.league; }
   if (st.arena)       { data.arena       = st.arena;       document.getElementById('arena').value       = st.arena; }
   if (st.kickoffTime) { data.kickoffTime = st.kickoffTime; document.getElementById('kickoffTime').value = st.kickoffTime; }
-  if (st.homeTeam && st.homeTeam !== 'MFC')  { data.homeTeam = st.homeTeam; document.getElementById('homeTeam').value = st.homeTeam; }
-  if (st.awayTeam && st.awayTeam !== 'AWAY') { data.awayTeam = st.awayTeam; document.getElementById('awayTeam').value = st.awayTeam; }
+  if (st.homeTeam) { data.homeTeam = st.homeTeam; document.getElementById('homeTeam').value = st.homeTeam; }
+  if (st.awayTeam) { data.awayTeam = st.awayTeam; document.getElementById('awayTeam').value = st.awayTeam; }
 
   if (st.homeLogo && !st.homeLogo.startsWith('__upload__')) {
     data.homeLogo = st.homeLogo;
@@ -702,7 +842,7 @@ function prefillFromState(st) {
 
 function checkFogisAlreadyLoaded(st) {
   const hp = st.homePlayers || [];
-  if (hp.length > 0 && st.homeTeam !== 'MFC') {
+  if (hp.length > 0) {
     const el = document.getElementById('fogisAlreadyLoaded');
     const msg = document.getElementById('fogisAlreadyMsg');
     el.classList.remove('hidden');

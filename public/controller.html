@@ -122,8 +122,8 @@ textarea:focus{outline:none;border-color:var(--blue);}
 </head>
 <body>
 <header>
-  <img id="homeLogoImgHeader" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
-  <h1>MFCLIVE</h1>
+  <img id="clubLogoHeader" src="/logo/club" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+  <h1 id="clubNameHeader">MFCLIVE</h1>
   <p style="font-size:9px;color:rgba(125,184,247,.3);letter-spacing:.12em;text-transform:uppercase;margin-top:2px;">© 2025 Besmir Pepa</p>
   <span class="conn" id="conn">connecting…</span>
 </header>
@@ -204,10 +204,10 @@ textarea:focus{outline:none;border-color:var(--blue);}
 
 <!-- PERIOD -->
 <div class="card">
-  <div class="card-title">🔢 Half</div>
-  <div class="period-row">
-    <button class="btn" id="p1btn" onclick="setPeriod(1)">1st Half</button>
-    <button class="btn" id="p2btn" onclick="setPeriod(2)">2nd Half</button>
+  <div class="card-title">🔢 Period</div>
+  <div class="period-row" id="periodBtns">
+    <button class="btn" id="p1btn" onclick="setPeriod(1)">Period 1</button>
+    <button class="btn" id="p2btn" onclick="setPeriod(2)">Period 2</button>
   </div>
   <div style="margin-top:8px;">
     <button class="btn btn-yellow" id="htBtn" onclick="setHalfTime()" style="width:100%">☕ Half Time — 15:00</button>
@@ -460,10 +460,11 @@ function applyState(d) {
   document.getElementById('awayScore').textContent = d.awayScore;
   if (document.getElementById('homeLbl')) document.getElementById('homeLbl').textContent = d.homeTeam;
   if (document.getElementById('awayLbl')) document.getElementById('awayLbl').textContent = d.awayTeam;
-  const p1 = document.getElementById('p1btn');
-  const p2 = document.getElementById('p2btn');
-  p1.className = 'btn ' + (d.period===1?'btn-blue':'btn-gray');
-  p2.className = 'btn ' + (d.period===2?'btn-blue':'btn-gray');
+  const numP = d.numberOfPeriods || (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.numberOfPeriods) || 2;
+  for (let i = 1; i <= numP; i++) {
+    const pb = document.getElementById('p' + i + 'btn');
+    if (pb) pb.className = 'btn ' + (d.period === i ? 'btn-blue' : 'btn-gray');
+  }
   renderFouls('homeFoulDots','homeFoulWarn', d.homeFouls);
   renderFouls('awayFoulDots','awayFoulWarn', d.awayFouls);
   localRedCards = (d.redCards||[]).map(rc => ({...rc}));
@@ -519,7 +520,7 @@ function applyState(d) {
     if (ytInput.value !== d.ytUrl) { ytInput.value = d.ytUrl; updateYT(true); }
   }
   const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
-  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();const hh=document.getElementById('homeLogoImgHeader');if(hh)hh.src='/logo/home?t='+Date.now();}
+  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();}
   if(d.awayLogo&&al&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();}
 }
 
@@ -568,6 +569,37 @@ function connectSSE() {
 }
 connectSSE();
 
+// ── Branding — apply accent colour and club name from injected config ──────────
+(function applyBranding() {
+  const cfg = window._MFCLIVE_CONFIG || {};
+  if (cfg.accentColour && /^#[0-9a-fA-F]{6}$/.test(cfg.accentColour)) {
+    const [r,g,b] = [1,3,5].map(i => parseInt(cfg.accentColour.slice(i,i+2), 16));
+    document.documentElement.style.setProperty('--blue',   cfg.accentColour);
+    document.documentElement.style.setProperty('--lblue',  `rgba(${r},${g},${b},.85)`);
+    document.documentElement.style.setProperty('--border', `rgba(${r},${g},${b},.2)`);
+  }
+  if (cfg.club) {
+    const el = document.getElementById('clubNameHeader');
+    if (el) el.textContent = cfg.club;
+  }
+  // Render period buttons dynamically based on numberOfPeriods
+  const n = cfg.numberOfPeriods || 2;
+  if (n !== 2) {
+    const container = document.getElementById('periodBtns');
+    if (container) {
+      container.innerHTML = '';
+      for (let i = 1; i <= n; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-gray';
+        btn.id = 'p' + i + 'btn';
+        btn.textContent = 'Period ' + i;
+        btn.onclick = () => setPeriod(i);
+        container.appendChild(btn);
+      }
+    }
+  }
+})();
+
 // ── Restore banner ────────────────────────────────────────────────────────────
 function dismissRestoreBanner() {
   document.getElementById('restoreBanner').classList.remove('show');
@@ -592,7 +624,8 @@ let preResetMs = null;
 let undoResetTimeout = null;
 
 function confirmReset() {
-  if (!confirm('Reset timer to 20:00?')) return;
+  const pdMs = (gameState && gameState.periodDurationMs) || ((window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.periodDuration || 20) * 60000);
+  if (!confirm('Reset timer to ' + fmt(pdMs) + '?')) return;
   preResetMs = localMs; // save current value for undo
   act('timer_reset');
   // Show undo button for 10 seconds
@@ -648,7 +681,7 @@ async function act(action, payload={}) {
   } catch(e) { toast('Connection error'); }
 }
 
-function setPeriod(p) { act('set_period',{period:p}); toast('Half ' + p + ' — fouls reset'); }
+function setPeriod(p) { act('set_period',{period:p}); toast('Period ' + p + ' — fouls reset'); }
 
 let adjustAutoClose = null;
 let adjMs = 0; // staging value shown in the panel
@@ -679,8 +712,9 @@ function renderAdjust() {
 
 function adjustStep(unit, delta) {
   if (typeof delta !== 'number' || !isFinite(delta)) return;
-  if (unit === 'min') adjMs = Math.min(20*60*1000, Math.max(0, adjMs + delta * 60000));
-  if (unit === 'sec') adjMs = Math.min(20*60*1000, Math.max(0, adjMs + delta * 1000));
+  const cap = (gameState && gameState.periodDurationMs) || ((window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.periodDuration || 20) * 60000);
+  if (unit === 'min') adjMs = Math.min(cap, Math.max(0, adjMs + delta * 60000));
+  if (unit === 'sec') adjMs = Math.min(cap, Math.max(0, adjMs + delta * 1000));
   renderAdjust();
   resetAdjustAutoClose();
 }

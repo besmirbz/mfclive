@@ -27,7 +27,7 @@ let QRCode; try { QRCode = require('qrcode'); } catch(e) { /* optional */ }
 let _qrDataUrl = '';
 
 const PORT = Number(config.port) || 3000;
-const MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : ['malmö futsal', 'mfc'];
+let MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : [];
 
 // ── Detect local LAN IP ────────────────────────────────────────────────────────
 // Prefers real WiFi/Ethernet adapters; skips virtual adapters (VirtualBox, VMware, WSL, etc.)
@@ -192,23 +192,24 @@ function esc(str) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-const HALF_DURATION_MS = (Number(config.halfDurationMinutes) || 20) * 60 * 1000;
+let PERIOD_DURATION_MS = (Number(config.periodDuration) || 20) * 60 * 1000;
+let NUM_PERIODS = Math.max(1, Math.min(10, Number(config.numberOfPeriods) || 2));
 
 // ── Runtime flags ──────────────────────────────────────────────────────────────
 let _wasRestored = false; // set true by restoreState() if a meaningful snapshot was recovered
 
 // ── Game State ─────────────────────────────────────────────────────────────────
 const state = {
-  homeTeam:  'MFC',
-  awayTeam:  'AWAY',
+  homeTeam:  '',
+  awayTeam:  '',
   homeScore: 0,
   awayScore: 0,
   period:    1,
-  // Timer — counts DOWN from HALF_DURATION_MS to 0
-  timerMs:      HALF_DURATION_MS,
+  // Timer — counts DOWN from PERIOD_DURATION_MS to 0
+  timerMs:      PERIOD_DURATION_MS,
   timerRunning: false,
   timerStart:   null,   // Date.now() snapshot when last started
-  timerBaseMs:  HALF_DURATION_MS, // value of timerMs at last start
+  timerBaseMs:  PERIOD_DURATION_MS, // value of timerMs at last start
   // Fouls — reset each half
   homeFouls: 0,
   awayFouls: 0,
@@ -308,7 +309,7 @@ function restoreState() {
       kickoffTime:   snap.kickoffTime   || '',
     });
     if ((snap.homeScore || 0) > 0 || (snap.awayScore || 0) > 0 ||
-        (snap.timerMs != null && snap.timerMs < HALF_DURATION_MS - 5000)) {
+        (snap.timerMs != null && snap.timerMs < PERIOD_DURATION_MS - 5000)) {
       _wasRestored = true;
     }
     console.log(`[state] Restored from snapshot — ${state.homeTeam} ${state.homeScore}–${state.awayScore} ${state.awayTeam}`);
@@ -363,7 +364,9 @@ function getPublicState() {
     kickoffTime:     state.kickoffTime || '',
     arena:           state.arena,
     league:          state.league,
-    wasRestored:     _wasRestored,
+    wasRestored:      _wasRestored,
+    periodDurationMs: PERIOD_DURATION_MS,
+    numberOfPeriods:  NUM_PERIODS,
     homePlayers:  state._homePlayers || [],
     awayPlayers:  state._awayPlayers || [],
     homeStarters:  state._homeStarters  || [],
@@ -429,8 +432,8 @@ function handleAction(action, payload) {
       break;
 
     case 'timer_reset':
-      state.timerMs      = HALF_DURATION_MS;
-      state.timerBaseMs  = HALF_DURATION_MS;
+      state.timerMs      = PERIOD_DURATION_MS;
+      state.timerBaseMs  = PERIOD_DURATION_MS;
       state.timerRunning = false;
       state.timerStart   = null;
       break;
@@ -489,8 +492,8 @@ function handleAction(action, payload) {
       state.halfTime  = false;
       state.homeFouls = 0;
       state.awayFouls = 0;
-      state.timerMs   = HALF_DURATION_MS;
-      state.timerBaseMs = HALF_DURATION_MS;
+      state.timerMs   = PERIOD_DURATION_MS;
+      state.timerBaseMs = PERIOD_DURATION_MS;
       state.timerRunning = false;
       break;
 
@@ -582,7 +585,7 @@ function handleAction(action, payload) {
       state.ytUrl = (typeof payload.url === 'string') ? payload.url.slice(0, 300) : '';
       break;
     case 'timer_set':
-      state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
+      state.timerMs = Math.min(PERIOD_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;
       break;
 
@@ -598,8 +601,8 @@ function handleAction(action, payload) {
       state.redCards     = [];
       state.period       = 1;
       state.halfTime     = false;
-      state.timerMs      = HALF_DURATION_MS;
-      state.timerBaseMs  = HALF_DURATION_MS;
+      state.timerMs      = PERIOD_DURATION_MS;
+      state.timerBaseMs  = PERIOD_DURATION_MS;
       state.timerRunning = false;
       state.timerStart   = null;
       state.lowerThird   = { visible: false, line1: '', line2: '', team: '', event: '' };
@@ -742,12 +745,15 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     const tunnelControllerUrl = _tunnelUrl ? `${_tunnelUrl}/controller?token=${SECRET}` : null;
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     res.end(JSON.stringify({
-      localUrl:     localControllerUrl,
-      tunnelUrl:    tunnelControllerUrl,
-      tunnelStatus: _tunnelStatus,
-      qrDataUrl:    _qrDataUrl,
-      club:         config.club || 'MFCLIVE',
-      port:         PORT,
+      localUrl:        localControllerUrl,
+      tunnelUrl:       tunnelControllerUrl,
+      tunnelStatus:    _tunnelStatus,
+      qrDataUrl:       _qrDataUrl,
+      club:            config.club || 'MFCLIVE',
+      port:            PORT,
+      accentColour:    config.accentColour || '#3D82F6',
+      numberOfPeriods: NUM_PERIODS,
+      periodDuration:  Number(config.periodDuration) || 20,
     }));
     return;
   }
@@ -885,6 +891,101 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     return;
   }
 
+  // ── Config API ─────────────────────────────────────────────────────────────────
+  if (route === '/api/config' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({
+      club:            config.club || '',
+      accentColour:    config.accentColour || '#3D82F6',
+      numberOfPeriods: NUM_PERIODS,
+      periodDuration:  Number(config.periodDuration) || 20,
+      logoPath:        config.logoPath || '',
+    }));
+    return;
+  }
+
+  if (route === '/api/config' && req.method === 'POST') {
+    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+      res.writeHead(415); res.end('Unsupported Media Type'); return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; if (body.length > 4096) { res.writeHead(413); res.end('Too large'); req.socket.destroy(); } });
+    req.on('end', () => {
+      try {
+        const updates = JSON.parse(body || '{}');
+        const validators = {
+          club:            v => typeof v === 'string' && v.trim().length <= 60,
+          accentColour:    v => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v),
+          numberOfPeriods: v => Number.isInteger(v) && v >= 1 && v <= 10,
+          periodDuration:  v => Number.isInteger(v) && v >= 1 && v <= 90,
+        };
+        const errors = [];
+        for (const [key, val] of Object.entries(updates)) {
+          if (!validators[key]) { errors.push(`Unknown field: ${key}`); continue; }
+          if (!validators[key](val)) { errors.push(`Invalid value for ${key}`); continue; }
+          config[key] = (key === 'club') ? val.trim() : val;
+        }
+        if (errors.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ errors })); return; }
+        // Hot-apply mutable runtime values
+        PERIOD_DURATION_MS = (Number(config.periodDuration) || 20) * 60 * 1000;
+        NUM_PERIODS = Math.max(1, Math.min(10, Number(config.numberOfPeriods) || 2));
+        MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : [];
+        // Persist to config.json
+        const cfgPath = path.join(__dirname, 'config.json');
+        fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch(e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // ── Club logo upload ────────────────────────────────────────────────────────────
+  if (req.method === 'POST' && route === '/upload-club-logo') {
+    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+      res.writeHead(415); res.end('Unsupported Media Type'); return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; if (body.length > 6 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+    req.on('end', () => {
+      try {
+        const { filename, data } = JSON.parse(body);
+        const ext = path.extname(String(filename || '')).toLowerCase();
+        if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
+        const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
+        const buf = Buffer.from(raw, 'base64');
+        if (buf.length > 3 * 1024 * 1024) throw new Error('File too large (max 3 MB)');
+        fs.mkdirSync(LOGOS_DIR, { recursive: true });
+        const safeName = 'club-logo' + ext;
+        fs.writeFileSync(path.join(LOGOS_DIR, safeName), buf);
+        config.logoPath = safeName;
+        const cfgPath = path.join(__dirname, 'config.json');
+        fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch(e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // ── Club logo serve ─────────────────────────────────────────────────────────────
+  if (route === '/logo/club') {
+    const logoName = config.logoPath ? path.basename(config.logoPath) : '';
+    if (!logoName) { res.writeHead(404); res.end('No club logo set'); return; }
+    const fp = path.join(LOGOS_DIR, logoName);
+    if (!fs.existsSync(fp)) { res.writeHead(404); res.end('Club logo file not found'); return; }
+    const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp' }[path.extname(logoName).toLowerCase()] || 'image/png';
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' });
+    fs.createReadStream(fp).pipe(res);
+    return;
+  }
+
     // ── Serve HTML overlay files ────────────────────────────────────────────────
   const fileMap = {
     '/':              'controller.html',
@@ -906,7 +1007,13 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject session token into controller and bookmarklet
       if (file === 'controller.html' || file === 'bookmarklet.html' || file === 'wizard.html') {
-        html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};</script>\n</head>`);
+        const clientCfg = JSON.stringify({
+          club:            config.club || 'MFCLIVE',
+          accentColour:    config.accentColour || '#3D82F6',
+          numberOfPeriods: NUM_PERIODS,
+          periodDuration:  Number(config.periodDuration) || 20,
+        });
+        html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};window._MFCLIVE_CONFIG=${clientCfg};</script>\n</head>`);
       }
       const ct = jsFiles.has(file) ? 'application/javascript' : 'text/html';
       res.writeHead(200, { 'Content-Type': ct });

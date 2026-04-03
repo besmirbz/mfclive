@@ -1,6 +1,9 @@
 {
   "club": "Malmö Futsal Club",
   "clubKeywords": ["malmö futsal", "mfc"],
-  "halfDurationMinutes": 20,
+  "numberOfPeriods": 2,
+  "periodDuration": 20,
+  "accentColour": "#3D82F6",
+  "logoPath": "",
   "port": 3000
 }
