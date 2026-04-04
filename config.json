@@ -1,9 +1,12 @@
 {
-  "club": "Malmö Futsal Club",
-  "clubKeywords": ["malmö futsal", "mfc"],
+  "club": "Korpen Malmo",
+  "clubKeywords": [
+    "malmö futsal",
+    "mfc"
+  ],
   "numberOfPeriods": 2,
   "periodDuration": 20,
-  "accentColour": "#3D82F6",
+  "accentColour": "#3d82f6",
   "logoPath": "",
   "port": 3000
 }

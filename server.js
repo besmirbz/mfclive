@@ -323,8 +323,14 @@ restoreState();
 // ── SSE clients ────────────────────────────────────────────────────────────────
 const clients = new Set();
 
+// SSE_PAD ensures each broadcast exceeds Cloudflare's proxy read-buffer (~4 KB)
+// so the event is flushed to the browser immediately rather than held until the
+// buffer fills. The padding is an SSE comment (starts with ':') and is ignored
+// by EventSource clients.
+const _SSE_PAD = ': ' + ' '.repeat(4093) + '\n\n';
+
 function broadcast(data) {
-  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  const msg = _SSE_PAD + `data: ${JSON.stringify(data)}\n\n`;
   for (const res of [...clients]) {
     try { res.write(msg); } catch(e) { clients.delete(res); console.error('[sse] dropped client:', e.message); }
   }
@@ -997,6 +1003,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     '/lineup':        'overlays/overlay-lineup.html',
     '/brb':           'overlays/overlay-brb.html',
     '/startingsoon':  'overlays/overlay-startingsoon.html',
+    '/overlay':       'overlays/overlay.html',
     '/audio-util.js': 'audio-util.js',
   };
   const jsFiles = new Set(['audio-util.js']);
@@ -1006,7 +1013,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     if (fs.existsSync(fp)) {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject session token into controller and bookmarklet
-      if (file === 'controller.html' || file === 'bookmarklet.html' || file === 'wizard.html') {
+      if (file === 'controller.html' || file === 'bookmarklet.html' || file === 'wizard.html' || file === 'overlays/overlay.html') {
         const clientCfg = JSON.stringify({
           club:            config.club || 'MFCLIVE',
           accentColour:    config.accentColour || '#3D82F6',

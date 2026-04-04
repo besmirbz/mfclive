@@ -86,6 +86,13 @@ textarea:focus{outline:none;border-color:var(--blue);}
 /* Keyboard hint */
 .kbd-hint{font-size:10px;color:rgba(125,184,247,.4);margin-top:8px;letter-spacing:.05em;text-align:center;}
 
+/* Inline-editable team name label in Score+Fouls */
+.team-name-lbl{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;border-bottom:1px dashed rgba(61,130,246,.3);padding-bottom:1px;transition:border-color .15s;}
+.team-name-lbl:hover,.team-name-lbl:active{border-bottom-color:var(--blue);}
+.team-name-input{background:#0a1525;border:1px solid var(--blue);color:#fff;border-radius:5px;padding:3px 6px;font-size:13px;font-weight:800;font-family:inherit;text-transform:uppercase;letter-spacing:.05em;width:62px;outline:none;}
+.pencil{font-size:10px;opacity:.35;cursor:pointer;margin-left:5px;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
+.pencil:hover,.pencil:active{opacity:.85;}
+
 /* Overlay visibility controls */
 @keyframes ovPulse{0%,100%{opacity:1}50%{opacity:.25}}
 .ov-row{display:flex;align-items:center;padding:11px 13px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);margin-bottom:6px;transition:background .2s,border-color .2s;user-select:none;-webkit-tap-highlight-color:transparent;}
@@ -180,28 +187,6 @@ textarea:focus{outline:none;border-color:var(--blue);}
   <div class="kbd-hint">Keyboard: Space = start/stop</div>
 </div>
 
-<!-- OVERLAYS -->
-<div class="card">
-  <div class="card-title">🎬 Overlays</div>
-  <div id="ovRows">
-    <!-- populated from SSE state -->
-    <div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px;">connecting…</div>
-  </div>
-  <!-- Kickoff time — drives the Starting Soon countdown -->
-  <div style="border-top:1px solid rgba(61,130,246,.12);margin-top:10px;padding-top:10px;display:flex;align-items:center;gap:8px;">
-    <span style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(125,184,247,.5);flex-shrink:0;">⏰ Kickoff</span>
-    <input type="time" id="kickoffInput" style="background:#0a1525;border:1px solid var(--border);color:#fff;border-radius:6px;padding:7px 10px;font-size:14px;font-family:inherit;flex:1;min-width:0;" />
-    <button class="btn btn-blue btn-small" onclick="setKickoff()">Set</button>
-  </div>
-</div>
-
-<!-- NEW GAME — resets scores, timer, fouls; keeps team names and lineups -->
-<div class="card" style="border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.04);">
-  <div class="card-title" style="color:var(--red);">⚠ New Game</div>
-  <p style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px;line-height:1.5;">Resets score, timer, fouls, and penalties back to zero. Team names and lineups are kept.</p>
-  <button class="btn btn-red" style="width:100%" onclick="confirmNewGame()">⟳ Reset for New Game</button>
-</div>
-
 <!-- PERIOD -->
 <div class="card">
   <div class="card-title">🔢 Period</div>
@@ -210,27 +195,15 @@ textarea:focus{outline:none;border-color:var(--blue);}
     <button class="btn" id="p2btn" onclick="setPeriod(2)">Period 2</button>
   </div>
   <div style="margin-top:8px;">
-    <button class="btn btn-yellow" id="htBtn" onclick="setHalfTime()" style="width:100%">☕ Half Time — 15:00</button>
+    <button class="btn btn-yellow" id="htBtn" onclick="setHalfTime()" style="width:100%">☕ Half Time</button>
   </div>
   <div class="kbd-hint" id="htHint" style="min-height:14px;"></div>
-</div>
-
-<!-- TEAM NAMES -->
-<div class="card">
-  <div class="card-title">🏷 Team Short Names</div>
-  <div class="two-col" style="gap:8px;margin-bottom:0;">
-    <div>
-      <label style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);display:block;margin-bottom:5px;">Home</label>
-      <input type="text" id="homeShortName" placeholder="e.g. MFC" maxlength="6"
-        style="text-transform:uppercase;font-weight:900;font-size:18px;letter-spacing:.08em;"
-        oninput="pushShortName()" />
-    </div>
-    <div>
-      <label style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue);display:block;margin-bottom:5px;">Away</label>
-      <input type="text" id="awayShortName" placeholder="e.g. ÖJE" maxlength="6"
-        style="text-transform:uppercase;font-weight:900;font-size:18px;letter-spacing:.08em;"
-        oninput="pushShortName()" />
-    </div>
+  <div class="kbd-hint">Switching periods resets fouls &amp; penalties</div>
+  <!-- Kickoff time — drives the Starting Soon countdown -->
+  <div style="border-top:1px solid rgba(61,130,246,.12);margin-top:10px;padding-top:10px;display:flex;align-items:center;gap:8px;">
+    <span style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(125,184,247,.5);flex-shrink:0;">⏰ Kickoff</span>
+    <input type="time" id="kickoffInput" style="background:#0a1525;border:1px solid var(--border);color:#fff;border-radius:6px;padding:7px 10px;font-size:14px;font-family:inherit;flex:1;min-width:0;" />
+    <button class="btn btn-blue btn-small" onclick="setKickoff()">Set</button>
   </div>
 </div>
 
@@ -242,14 +215,18 @@ textarea:focus{outline:none;border-color:var(--blue);}
     <div>
       <div class="team-hdr">
         <img id="homeLogoImg" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
-        <span id="homeLbl">MFC</span>
+        <span id="homeLbl" class="team-name-lbl" ondblclick="editTeamName('home')" title="Double-tap to edit name">MFC</span>
+        <span class="pencil" onclick="editTeamName('home')">✎</span>
+        <input id="homeNameInput" class="team-name-input" maxlength="6" style="display:none"
+          onblur="commitTeamName('home')"
+          onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this._cancel=true;this.blur();}" />
       </div>
       <div class="big-num" id="homeScore">0</div>
       <div class="col-btns">
         <button class="btn btn-blue"  onclick="act('goal_home')">+ Goal</button>
         <button class="btn btn-gray"  onclick="act('undo_home')">– Undo</button>
       </div>
-      <div style="height:10px"></div>
+      <div style="border-top:1px solid rgba(61,130,246,.08);margin:10px 0 8px;"></div>
       <div class="foul-dots" id="homeFoulDots"></div>
       <div class="foul-warn" id="homeFoulWarn"></div>
       <div class="col-btns" style="margin-top:5px">
@@ -261,14 +238,18 @@ textarea:focus{outline:none;border-color:var(--blue);}
     <div>
       <div class="team-hdr">
         <img id="awayLogoImg" src="/logo/away" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
-        <span id="awayLbl">ÖIF</span>
+        <span id="awayLbl" class="team-name-lbl" ondblclick="editTeamName('away')" title="Double-tap to edit name">ÖIF</span>
+        <span class="pencil" onclick="editTeamName('away')">✎</span>
+        <input id="awayNameInput" class="team-name-input" maxlength="6" style="display:none"
+          onblur="commitTeamName('away')"
+          onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this._cancel=true;this.blur();}" />
       </div>
       <div class="big-num" id="awayScore">0</div>
       <div class="col-btns">
         <button class="btn btn-blue"  onclick="act('goal_away')">+ Goal</button>
         <button class="btn btn-gray"  onclick="act('undo_away')">– Undo</button>
       </div>
-      <div style="height:10px"></div>
+      <div style="border-top:1px solid rgba(61,130,246,.08);margin:10px 0 8px;"></div>
       <div class="foul-dots" id="awayFoulDots"></div>
       <div class="foul-warn" id="awayFoulWarn"></div>
       <div class="col-btns" style="margin-top:5px">
@@ -277,11 +258,28 @@ textarea:focus{outline:none;border-color:var(--blue);}
       </div>
     </div>
   </div>
-  <div class="kbd-hint">Keyboard: 1=home goal, 2=away goal, Q/W=undo goals, F/G=fouls</div>
+  <div class="kbd-hint">Keyboard: 1=home goal · 2=away goal · Q/W=undo goals · F/G=fouls</div>
+  <div class="kbd-hint" style="margin-top:3px;">✎ Tap the pencil to rename a team</div>
   <!-- Active penalties — auto-shown when red cards exist -->
   <div id="rcSection" style="display:none;margin-top:10px;border-top:1px solid rgba(61,130,246,.12);padding-top:10px;">
     <div style="font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--red);margin-bottom:7px;">🟥 Active Penalties</div>
     <div class="rc-list" id="rcList"></div>
+  </div>
+</div>
+
+<!-- NEW GAME — resets scores, timer, fouls; keeps team names and lineups -->
+<div class="card" style="border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.04);margin-top:18px;">
+  <div class="card-title" style="color:var(--red);">⚠ New Game</div>
+  <p style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px;line-height:1.5;">Resets score, timer, fouls, and penalties back to zero. Team names and lineups are kept.</p>
+  <button class="btn btn-red" style="width:100%" onclick="confirmNewGame()">⟳ Reset for New Game</button>
+</div>
+
+<!-- OVERLAYS -->
+<div class="card">
+  <div class="card-title">🎬 Overlays</div>
+  <div id="ovRows">
+    <!-- populated from SSE state -->
+    <div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:6px;">connecting…</div>
   </div>
 </div>
 
@@ -458,8 +456,9 @@ function applyState(d) {
   updateTimerDisplay();
   document.getElementById('homeScore').textContent = d.homeScore;
   document.getElementById('awayScore').textContent = d.awayScore;
-  if (document.getElementById('homeLbl')) document.getElementById('homeLbl').textContent = d.homeTeam;
-  if (document.getElementById('awayLbl')) document.getElementById('awayLbl').textContent = d.awayTeam;
+  // Only update labels when not actively being edited inline
+  if (document.getElementById('homeNameInput').style.display === 'none') document.getElementById('homeLbl').textContent = d.homeTeam;
+  if (document.getElementById('awayNameInput').style.display === 'none') document.getElementById('awayLbl').textContent = d.awayTeam;
   const numP = d.numberOfPeriods || (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.numberOfPeriods) || 2;
   for (let i = 1; i <= numP; i++) {
     const pb = document.getElementById('p' + i + 'btn');
@@ -484,10 +483,6 @@ function applyState(d) {
     document.getElementById('awayLineup').value = d.lineup.away.join('\n');
     document.getElementById('awayLineupLbl').textContent = d.awayTeam;
   }
-  const hnEl = document.getElementById('homeShortName');
-  const anEl = document.getElementById('awayShortName');
-  if (!hnEl.dataset.manual) hnEl.value = d.homeTeam || '';
-  if (!anEl.dataset.manual) anEl.value = d.awayTeam || '';
   if (d.homePlayers && d.homePlayers.length) {
     const homeKey = d.homeTeam + '|' + d.homePlayers.map(p => p.num + ':' + p.name).join('|');
     if (homeKey !== _prevHomePlayerBtnKey) {
@@ -646,20 +641,30 @@ function undoReset() {
   preResetMs = null;
 }
 
-// Push manually edited short names to server immediately — single consolidated action
-let shortNameDebounce = null;
-function pushShortName() {
-  document.getElementById('homeShortName').dataset.manual = '1';
-  document.getElementById('awayShortName').dataset.manual = '1';
-  clearTimeout(shortNameDebounce);
-  shortNameDebounce = setTimeout(() => {
-    const h = document.getElementById('homeShortName').value.trim().toUpperCase();
-    const a = document.getElementById('awayShortName').value.trim().toUpperCase();
-    act('set_team_names', {
-      homeTeam: h || gameState.homeTeam,
-      awayTeam: a || gameState.awayTeam,
-    });
-  }, 400);
+// Inline team name editing — double-tap the name label in Score+Fouls to edit
+function editTeamName(side) {
+  const lbl = document.getElementById(side + 'Lbl');
+  const inp = document.getElementById(side + 'NameInput');
+  inp._cancel = false;
+  inp.value = lbl.textContent;
+  lbl.style.display = 'none';
+  inp.style.display = '';
+  inp.focus();
+  inp.select();
+}
+function commitTeamName(side) {
+  const lbl = document.getElementById(side + 'Lbl');
+  const inp = document.getElementById(side + 'NameInput');
+  inp.style.display = 'none';
+  lbl.style.display = '';
+  if (inp._cancel) return;
+  const val = inp.value.trim().toUpperCase().slice(0, 6);
+  if (!val || val === lbl.textContent) return;
+  lbl.textContent = val;
+  act('set_team_names', {
+    homeTeam: side === 'home' ? val : (gameState.homeTeam || ''),
+    awayTeam: side === 'away' ? val : (gameState.awayTeam || ''),
+  });
 }
 
 
@@ -738,12 +743,14 @@ function resetAdjustAutoClose() {
 }
 
 function setHalfTime() {
+  const htMin = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.halfTimeDuration) || 15;
+  const htMs  = htMin * 60000;
   act('timer_stop');
-  act('timer_set', { ms: 15 * 60 * 1000 });
+  act('timer_set', { ms: htMs });
   act('set_halftime', { active: true });
   document.getElementById('htBtn').style.background = 'var(--green)';
   document.getElementById('htHint').textContent = '↺ Reset or 2nd Half to resume';
-  toast('Half time — 15:00 loaded, press Start when ready');
+  toast('Half time — ' + String(htMin).padStart(2,'0') + ':00 loaded, press Start when ready');
   setTimeout(() => {
     document.getElementById('htBtn').style.background = '';
     document.getElementById('htHint').textContent = '';

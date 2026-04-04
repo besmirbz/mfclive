@@ -281,8 +281,9 @@ let wasVisible = false;
 
 let _sseDelay = 1000;
 let _isInitialSync = false;
+const _tok = new URLSearchParams(location.search).get('token');
 function connectSSE() {
-  const es = new EventSource('/events');
+  const es = new EventSource('/events' + (_tok ? '?token=' + _tok : ''));
   es.onopen  = () => { _sseDelay = 1000; _isInitialSync = true; };
   es.onerror = () => { es.close(); setTimeout(connectSSE, _sseDelay); _sseDelay = Math.min(_sseDelay * 2, 30000); };
   es.onmessage = e => {
