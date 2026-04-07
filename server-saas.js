@@ -455,6 +455,7 @@ function handleAction(room, action, payload) {
       break;
     }
 
+    case 'set_team_names': // alias sent by controller inline-edit
     case 'set_game_info':
       if (payload.homeTeam    !== undefined) s.homeTeam    = String(payload.homeTeam).slice(0, 6).toUpperCase();
       if (payload.awayTeam    !== undefined) s.awayTeam    = String(payload.awayTeam).slice(0, 6).toUpperCase();
@@ -509,8 +510,14 @@ function checkRateLimit(key) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 function isAuthorisedForRoom(req, room) {
-  const ip = req.socket.remoteAddress || '';
-  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return true;
+  // When behind Caddy (same machine), socket IP is always 127.0.0.1.
+  // Use X-Real-IP forwarded by Caddy to get the actual client IP.
+  // Local-only access (e.g. direct curl on the VPS without a token) is still allowed.
+  const socketIp = req.socket.remoteAddress || '';
+  const realIp   = req.headers['x-real-ip'] || '';
+  const isLocal  = (realIp === '' || realIp === '127.0.0.1' || realIp === '::1')
+                && (socketIp === '127.0.0.1' || socketIp === '::1' || socketIp === '::ffff:127.0.0.1');
+  if (isLocal) return true;
   const url  = new URL(req.url, `http://localhost:${PORT}`);
   const qTok = url.searchParams.get('token');
   const hTok = req.headers['x-mfclive-token'];
@@ -718,11 +725,12 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     const fileMap = {
       '/':             'controller.html',
       '/controller':   'controller.html',
-      '/scoreboard':   'overlays/overlay-scoreboard.html',
-      '/lowerthird':   'overlays/overlay-lowerthird.html',
-      '/lineup':       'overlays/overlay-lineup.html',
-      '/brb':          'overlays/overlay-brb.html',
-      '/startingsoon': 'overlays/overlay-startingsoon.html',
+      '/overlay':      'overlays/overlay.html',
+      '/scoreboard':   'overlays/overlay.html',
+      '/lowerthird':   'overlays/overlay.html',
+      '/lineup':       'overlays/overlay.html',
+      '/brb':          'overlays/overlay.html',
+      '/startingsoon': 'overlays/overlay.html',
       '/audio-util.js':'audio-util.js',
     };
     const file = fileMap[subpath];

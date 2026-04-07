@@ -839,8 +839,11 @@ function updateStartingSoon(d) {
 // ── Single SSE connection ─────────────────────────────────────────────────────
 let _sseDelay = 1000;
 
+const _eventsPath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.eventsPath) || '/events';
+const _statePath  = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.statePath)  || '/api/state';
+
 function connectSSE() {
-  const es = new EventSource('/events' + _tokenParam('?'));
+  const es = new EventSource(_eventsPath + _tokenParam('?'));
   es.onopen = () => {
     _sseDelay = 1000;
     _ltInitialSync = true; _ssInitialSync = true;
@@ -869,7 +872,7 @@ connectSSE();
 // Polling /api/state every 2 s guarantees visibility changes are applied even
 // when SSE delivery is stalled.
 (function startPoll() {
-  const url = '/api/state' + _tokenParam('?');
+  const url = _statePath + _tokenParam('?');
   setInterval(() => {
     fetch(url)
       .then(r => r.ok ? r.json() : null)
