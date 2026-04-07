@@ -522,10 +522,14 @@ function applyState(d) {
 // ── Polling fallback — used when SSE data is buffered (e.g. Cloudflare tunnel) ─
 // Starts on connect; cancelled the moment a real SSE message arrives.
 let _pollTimer = null;
+const _eventsPath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.eventsPath) || '/events';
+const _statePath  = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.statePath)  || '/api/state';
+const _actionPath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.actionPath) || '/action';
+
 function startPolling() {
   if (_pollTimer) return;
   _pollTimer = setInterval(() => {
-    fetch('/api/state?token=' + (window._MFCLIVE_TOKEN || ''))
+    fetch(_statePath + '?token=' + (window._MFCLIVE_TOKEN || ''))
       .then(r => r.json()).then(applyState).catch(() => {});
   }, 500);
 }
@@ -536,7 +540,7 @@ let _sseDelay = 1000;
 let _sseWatchdog;
 function connectSSE() {
   const connEl = document.getElementById('conn');
-  const es = new EventSource('/events?token=' + (window._MFCLIVE_TOKEN || ''));
+  const es = new EventSource(_eventsPath + '?token=' + (window._MFCLIVE_TOKEN || ''));
   function resetWatchdog() {
     clearTimeout(_sseWatchdog);
     _sseWatchdog = setTimeout(() => { es.close(); connectSSE(); }, 10000);
@@ -673,7 +677,7 @@ function timerStop()  { localRunning = false; updateTimerDisplay(); act('timer_s
 
 async function act(action, payload={}) {
   try {
-    const r = await fetch('/action', {
+    const r = await fetch(_actionPath, {
       method:'POST',
       headers:{
         'Content-Type':'application/json',
