@@ -764,15 +764,31 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     return;
   }
 
-  // ── Root redirect — helpful for the browser ───────────────────────────────────
+  // ── Static assets (logo etc.) ─────────────────────────────────────────────────
+  if (route.startsWith('/img/')) {
+    const fname = path.basename(route);
+    const fp = path.join(PUBLIC_DIR, 'img', fname);
+    if (fs.existsSync(fp)) {
+      const ext  = path.extname(fname).toLowerCase();
+      const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.svg':'image/svg+xml', '.webp':'image/webp' }[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=86400' });
+      fs.createReadStream(fp).pipe(res);
+    } else {
+      res.writeHead(404); res.end('Not found');
+    }
+    return;
+  }
+
+  // ── Landing page ──────────────────────────────────────────────────────────────
   if (route === '/' || route === '') {
-    const clubs = db.prepare('SELECT slug FROM clubs ORDER BY created_at DESC').all();
-    res.writeHead(200, { 'Content-Type': 'text/html' });
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>futsalplay.live</title>
-<style>body{background:#050B18;color:#fff;font-family:sans-serif;padding:40px;}a{color:#7DB8F7;}li{margin:8px 0;}</style>
-</head><body><h1>futsalplay.live</h1><h3>Active clubs</h3>
-<ul>${clubs.map(c => `<li><a href="/clubs/${esc(c.slug)}/controller">${esc(c.slug)}</a></li>`).join('')}</ul>
-</body></html>`);
+    const fp = path.join(PUBLIC_DIR, 'index.html');
+    if (fs.existsSync(fp)) {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(fs.readFileSync(fp, 'utf8'));
+    } else {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<h1>futsalplay.live</h1>');
+    }
     return;
   }
 
