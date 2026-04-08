@@ -737,10 +737,178 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       return;
     }
 
+    // FOGIS roster import (called by bookmarklet from minfotboll.se)
+    if (subpath === '/import-roster') {
+      function importSuccessPage(r) {
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#050B18;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}.box{text-align:center;padding:40px;max-width:480px;}.icon{font-size:52px;margin-bottom:18px;}h2{color:#7DB8F7;font-size:22px;margin-bottom:10px;}p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}.closing{margin-top:20px;font-size:12px;color:rgba(125,184,247,.35);}</style>
+</head><body><div class="box"><div class="icon">✅</div>
+<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
+<p>${r.homePlayers} home players · ${r.awayPlayers} away players loaded<br>${esc(r.arena)}</p>
+<p class="closing">This tab will close in 3 seconds…</p>
+</div><script>setTimeout(()=>window.close(),3000);</script></body></html>`;
+      }
+
+      function processRosterData(timeline, lineup) {
+        const hdr   = timeline?.GameHeaderInfo || {};
+        const arena = (hdr.ArenaName || '').trim();
+        const league = (hdr.CompetitionName || hdr.RoundName || '').trim();
+
+        function rosterToPlayers(roster) {
+          const players = [];
+          for (const p of (roster?.Players || [])) {
+            const num  = p.ShirtNumber || '';
+            const name = [p.FirstName, p.LastName].filter(Boolean).join(' ').trim();
+            const cap  = !!(p.TeamCaptain);
+            if (name || num) players.push({ num: Number(num) || 0, name, cap });
+          }
+          players.sort((a, b) => a.num - b.num);
+          return players;
+        }
+
+        const homePlayers = rosterToPlayers(lineup?.HomeTeamGameTeamRoster);
+        const awayPlayers = rosterToPlayers(lineup?.AwayTeamGameTeamRoster);
+
+        const homeTeam = (hdr.HomeTeamDisplayName || '').trim().toUpperCase().slice(0, 6) ||
+                         (hdr.HomeTeamName || '').trim().toUpperCase().slice(0, 6);
+        const awayTeam = (hdr.AwayTeamDisplayName || '').trim().toUpperCase().slice(0, 6) ||
+                         (hdr.AwayTeamName || '').trim().toUpperCase().slice(0, 6);
+
+        function playersToLineupText(players) {
+          return players.map(p => `#${p.num} ${p.name}${p.cap ? ' (C)' : ''}`);
+        }
+
+        const s = room.state;
+        s.homeTeam  = homeTeam;
+        s.awayTeam  = awayTeam;
+        s.arena     = arena;
+        s.league    = league;
+        s._homePlayers = homePlayers;
+        s._awayPlayers = awayPlayers;
+        const homeLines = playersToLineupText(homePlayers);
+        const awayLines = playersToLineupText(awayPlayers);
+        s.lineup = { home: homeLines, away: awayLines };
+        s._homeStarters = homeLines; s._homeSubs = []; s._homeSepLabel = 'Substitutes';
+        s._awayStarters = awayLines; s._awaySubs = []; s._awaySepLabel = 'Substitutes';
+        broadcastToRoom(room, getPublicState(room));
+        saveRoomState(room);
+        return { homeTeam, awayTeam, arena, homePlayers: homePlayers.length, awayPlayers: awayPlayers.length };
+      }
+
+      if (req.method === 'GET') {
+        const raw = url.searchParams.get('data');
+        if (!raw) { res.writeHead(400); res.end('Missing data param'); return; }
+        try {
+          const { timeline, lineup } = JSON.parse(Buffer.from(decodeURIComponent(raw), 'base64').toString('utf8'));
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(importSuccessPage(processRosterData(timeline, lineup)));
+        } catch(e) {
+          res.writeHead(400); res.end('Parse error: ' + e.message);
+        }
+        return;
+      }
+      if (req.method === 'POST') {
+        const chunks = [];
+        req.on('data', d => { chunks.push(d); if (Buffer.concat(chunks).length > 512*1024) { res.writeHead(413); res.end(); req.socket.destroy(); } });
+        req.on('end', () => {
+          try {
+            const body = Buffer.concat(chunks).toString('utf8');
+            let timeline, lineup;
+            if (body.startsWith('data=')) {
+              ({ timeline, lineup } = JSON.parse(Buffer.from(decodeURIComponent(body.slice(5)), 'base64').toString('utf8')));
+            } else {
+              ({ timeline, lineup } = JSON.parse(body));
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(processRosterData(timeline, lineup)));
+          } catch(e) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+    }
+
+    // Logo upload — base64 JSON from wizard
+    if (req.method === 'POST' && subpath === '/upload-logo') {
+      if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+        res.writeHead(415); res.end('Unsupported Media Type'); return;
+      }
+      const chunks = [];
+      req.on('data', d => { chunks.push(d); if (Buffer.concat(chunks).length > 6*1024*1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+      req.on('end', () => {
+        try {
+          const { side, filename, data } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if (!['home','away'].includes(side)) throw new Error('Invalid side');
+          const ext = path.extname(String(filename || '')).toLowerCase();
+          if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
+          const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
+          const buf = Buffer.from(raw, 'base64');
+          if (buf.length > 3*1024*1024) throw new Error('File too large (max 3 MB)');
+          const dir  = path.join(LOGOS_DIR, room.slug);
+          fs.mkdirSync(dir, { recursive: true });
+          const fname = `${side}-${Date.now()}${ext}`;
+          fs.writeFileSync(path.join(dir, fname), buf);
+          const logoVal = `__upload__:${fname}`;
+          if (side === 'home') room.state.homeLogo = logoVal;
+          else                 room.state.awayLogo = logoVal;
+          broadcastToRoom(room, getPublicState(room));
+          saveRoomState(room);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, logo: logoVal }));
+        } catch(e) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    // Club config update (accent colour, periods, duration)
+    if (req.method === 'POST' && subpath === '/api/config') {
+      if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+        res.writeHead(415); res.end('Unsupported Media Type'); return;
+      }
+      const chunks = [];
+      req.on('data', d => chunks.push(d));
+      req.on('end', () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          const errors  = [];
+          const updates = {};
+          if (body.accentColour !== undefined) {
+            if (!/^#[0-9a-fA-F]{6}$/.test(body.accentColour)) errors.push('Invalid accentColour');
+            else updates.accentColour = body.accentColour;
+          }
+          if (body.numberOfPeriods !== undefined) {
+            const n = Number(body.numberOfPeriods);
+            if (!Number.isInteger(n) || n < 1 || n > 10) errors.push('numberOfPeriods must be 1-10');
+            else updates.numberOfPeriods = n;
+          }
+          if (body.periodDuration !== undefined) {
+            const n = Number(body.periodDuration);
+            if (!Number.isInteger(n) || n < 1 || n > 90) errors.push('periodDuration must be 1-90');
+            else updates.periodDuration = n;
+          }
+          if (errors.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ errors })); return; }
+          Object.assign(room.config, updates);
+          db.prepare('UPDATE clubs SET config = ? WHERE id = ?').run(JSON.stringify(room.config), room.clubId);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, config: room.config }));
+        } catch(e) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
     // Overlay / controller HTML files
     const fileMap = {
       '/':             'controller.html',
       '/controller':   'controller.html',
+      '/wizard':       'wizard.html',
       '/overlay':      'overlays/overlay.html',
       '/scoreboard':   'overlays/overlay.html',
       '/lowerthird':   'overlays/overlay.html',
@@ -756,16 +924,20 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject per-club session context (token + config) into controller + overlays
       const clientCfg = JSON.stringify({
-        club:            room.name,
-        accentColour:    room.config.accentColour || '#3D82F6',
-        numberOfPeriods: numPeriods(room.config),
-        periodDuration:  Number(room.config.periodDuration) || 20,
-        // Overlays must use club-scoped API paths, not the single-tenant /events
-        eventsPath:      `/clubs/${room.slug}/events`,
-        actionPath:      `/clubs/${room.slug}/action`,
-        statePath:       `/clubs/${room.slug}/api/state`,
-        logoHomePath:    `/clubs/${room.slug}/logo/home`,
-        logoAwayPath:    `/clubs/${room.slug}/logo/away`,
+        club:              room.name,
+        accentColour:      room.config.accentColour || '#3D82F6',
+        numberOfPeriods:   numPeriods(room.config),
+        periodDuration:    Number(room.config.periodDuration) || 20,
+        eventsPath:        `/clubs/${room.slug}/events`,
+        actionPath:        `/clubs/${room.slug}/action`,
+        statePath:         `/clubs/${room.slug}/api/state`,
+        configPath:        `/clubs/${room.slug}/api/config`,
+        importRosterPath:  `/clubs/${room.slug}/import-roster`,
+        uploadLogoPath:    `/clubs/${room.slug}/upload-logo`,
+        controllerPath:    `/clubs/${room.slug}/controller?token=${room.secret}`,
+        wizardPath:        `/clubs/${room.slug}/wizard?token=${room.secret}`,
+        logoHomePath:      `/clubs/${room.slug}/logo/home`,
+        logoAwayPath:      `/clubs/${room.slug}/logo/away`,
       });
       html = html.replace('</head>',
         `<script>window._MFCLIVE_TOKEN=${JSON.stringify(room.secret)};window._MFCLIVE_CONFIG=${clientCfg};</script>\n</head>`
@@ -867,6 +1039,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
             rooms.set(slug, room);
 
             const controllerUrl = `https://futsalplay.live/clubs/${slug}/controller?token=${secret}`;
+            const wizardUrl     = `https://futsalplay.live/clubs/${slug}/wizard?token=${secret}`;
             const overlayUrl    = `https://futsalplay.live/clubs/${slug}/overlay?token=${secret}`;
 
             await mailer.sendMail({
@@ -877,6 +1050,9 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
                 `Hi,`,
                 ``,
                 `Your club "${clubName}" is live on Futsalplay.live.`,
+                ``,
+                `Start here — Game Setup Wizard (set up teams and lineups before your first game):`,
+                wizardUrl,
                 ``,
                 `Controller (open on any device to manage the game):`,
                 controllerUrl,
@@ -896,6 +1072,13 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
                   <img src="https://futsalplay.live/img/logo.png" alt="Futsalplay.live" style="height:60px;margin-bottom:24px;">
                   <h2 style="font-size:1.4rem;margin-bottom:8px;">Your club is ready!</h2>
                   <p style="color:#5a6580;">Hi, welcome to Futsalplay.live. Here are your links for <strong>${esc(clubName)}</strong>.</p>
+
+                  <div style="background:#F4F6FA;border-radius:10px;padding:20px 24px;margin:24px 0;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Start here — Game Setup</p>
+                    <p style="font-size:0.82rem;color:#5a6580;margin-bottom:8px;">Run this wizard before your first game to enter teams, lineups and match info.</p>
+                    <a href="${wizardUrl}" style="display:inline-block;background:#3D82F6;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Open Setup Wizard</a>
+                    <p style="font-size:0.75rem;color:#9aaabf;margin-top:10px;word-break:break-all;">${wizardUrl}</p>
+                  </div>
 
                   <div style="background:#F4F6FA;border-radius:10px;padding:20px 24px;margin:24px 0;">
                     <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Controller</p>
@@ -942,6 +1125,14 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     } else {
       res.writeHead(404); res.end('Not found');
     }
+    return;
+  }
+
+  // ── Guide page ────────────────────────────────────────────────────────────────
+  if (route === '/guide') {
+    const fp = path.join(PUBLIC_DIR, 'guide.html');
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : '<h1>Guide not found</h1>');
     return;
   }
 

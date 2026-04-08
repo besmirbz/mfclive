@@ -280,7 +280,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
         <span id="settingColourHex" style="font-size:13px;color:var(--dim);font-family:monospace;">#3D82F6</span>
       </div>
     </div>
-    <div class="field">
+    <div class="field" id="clubLogoField">
       <label>Club Logo</label>
       <div class="logo-row">
         <div class="logo-preview" id="clubLogoPreview" style="width:56px;height:56px;">
@@ -606,6 +606,15 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 <script>
 const TOKEN = window._MFCLIVE_TOKEN || '';
 
+// ── SaaS path config ───────────────────────────────────────────────────────────
+const _cfg = window._MFCLIVE_CONFIG || {};
+const _actionPath         = _cfg.actionPath         || '/action';
+const _statePath          = _cfg.statePath          || '/api/state';
+const _configPath         = _cfg.configPath         || '/api/config';
+const _uploadLogoPath     = _cfg.uploadLogoPath     || '/upload-logo';
+const _uploadClubLogoPath = _cfg.uploadClubLogoPath || '';
+const _controllerPath     = _cfg.controllerPath     || ('/controller?token=' + encodeURIComponent(TOKEN));
+
 // ── State ──────────────────────────────────────────────────────────────────────
 const STEPS = [
   { label: 'FOGIS import',  pip: true  },
@@ -702,17 +711,22 @@ function updateConnBar(status) {
   if ((hasTunnel || tunnelFailed) && _connPoller) { clearInterval(_connPoller); _connPoller = null; }
 }
 
-async function pollStatus() {
-  try {
-    const st = await fetch('/api/status', { headers: { 'X-MFCLIVE-Token': TOKEN } }).then(r => r.json());
-    updateConnBar(st);
-  } catch(e) { /* non-fatal */ }
-}
-
 function startConnBar() {
-  pollStatus();
-  // Poll every 3 s until tunnel URL arrives, then stop
-  _connPoller = setInterval(pollStatus, 3000);
+  const url = _controllerPath.startsWith('http') ? _controllerPath : window.location.origin + _controllerPath;
+  _connUrl = url;
+  const dot     = document.getElementById('connDot');
+  const label   = document.getElementById('connLabel');
+  const short   = document.getElementById('connUrlShort');
+  const infoUrl = document.getElementById('connInfoUrl');
+  const note    = document.getElementById('connInfoNote');
+  const link    = document.getElementById('connOpenLink');
+  dot.className     = 'conn-dot ready';
+  label.textContent = 'Controller link';
+  short.textContent = url.replace(/^https?:\/\//, '').replace(/\?.*$/, '');
+  infoUrl.textContent = url;
+  link.href = url;
+  note.textContent = 'Open this URL on your phone or tablet to control the scoreboard.';
+  document.getElementById('connQrPlaceholder').textContent = 'Scan with QR app (coming soon)';
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
@@ -725,7 +739,7 @@ async function init() {
   buildStepBar();
   startConnBar();
   try {
-    const st = await fetch('/api/state', { headers: { 'X-MFCLIVE-Token': TOKEN } }).then(r => r.json());
+    const st = await fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } }).then(r => r.json());
     prefillFromState(st);
     checkFogisAlreadyLoaded(st);
   } catch(e) { /* non-fatal */ }
@@ -753,6 +767,11 @@ function applyBranding() {
   if (document.getElementById('settingPeriods')  && cfg.numberOfPeriods) document.getElementById('settingPeriods').value  = cfg.numberOfPeriods;
   if (document.getElementById('settingDuration') && cfg.periodDuration)  document.getElementById('settingDuration').value = cfg.periodDuration;
   if (colourInput) colourInput.addEventListener('input', () => { colourHex.textContent = colourInput.value; });
+  // Hide club logo upload if not supported in this deployment
+  if (!_uploadClubLogoPath) {
+    const clubLogoField = document.getElementById('clubLogoField');
+    if (clubLogoField) clubLogoField.classList.add('hidden');
+  }
 }
 
 // ── Settings panel ─────────────────────────────────────────────────────────────
@@ -774,7 +793,7 @@ async function saveSettings() {
   if (!Object.keys(updates).length) { msgEl.innerHTML = '<div class="msg msg-err">Nothing to save.</div>'; return; }
   msgEl.innerHTML = '<div class="msg msg-info">Saving…</div>';
   try {
-    const r = await fetch('/api/config', { method: 'POST', headers: headers(), body: JSON.stringify(updates) });
+    const r = await fetch(_configPath, { method: 'POST', headers: headers(), body: JSON.stringify(updates) });
     const json = await r.json();
     if (!r.ok) throw new Error((json.errors || [json.error]).join(', '));
     msgEl.innerHTML = '<div class="msg msg-ok">✅ Settings saved. Reload the page to apply branding changes.</div>';
@@ -802,7 +821,8 @@ function handleClubLogoFile(file) {
     document.getElementById('clubLogoPreview').innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;">`;
     msgEl.innerHTML = '<div class="msg msg-info">Uploading…</div>';
     try {
-      const r = await fetch('/upload-club-logo', { method: 'POST', headers: headers(), body: JSON.stringify({ filename: file.name, data: dataUrl }) });
+      if (!_uploadClubLogoPath) throw new Error('Club logo upload is not available.');
+      const r = await fetch(_uploadClubLogoPath, { method: 'POST', headers: headers(), body: JSON.stringify({ filename: file.name, data: dataUrl }) });
       const json = await r.json();
       if (!r.ok) throw new Error(json.error || 'Upload failed');
       msgEl.innerHTML = '<div class="msg msg-ok">✅ Club logo saved.</div>';
@@ -966,7 +986,7 @@ function showStepErr(step, msg) {
 // ── API helpers ────────────────────────────────────────────────────────────────
 async function action(act, payload) {
   try {
-    await fetch('/action', { method: 'POST', headers: headers(), body: JSON.stringify({ action: act, payload }) });
+    await fetch(_actionPath, { method: 'POST', headers: headers(), body: JSON.stringify({ action: act, payload }) });
   } catch(e) { console.warn('[wizard] action failed:', e.message); }
 }
 
@@ -997,7 +1017,7 @@ function fogisOpenTab() {
   document.getElementById('fogisErr').classList.add('hidden');
 
   // Snapshot current state signature so we can detect when it changes
-  fetch('/api/state', { headers: { 'X-MFCLIVE-Token': TOKEN } })
+  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
     .then(r => r.json())
     .then(st => {
       fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
@@ -1023,7 +1043,7 @@ function extractFogisId(url) {
 }
 
 function pollForRoster() {
-  fetch('/api/state', { headers: { 'X-MFCLIVE-Token': TOKEN } })
+  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
     .then(r => r.json())
     .then(st => {
       const sig = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
@@ -1119,7 +1139,7 @@ function handleLogoFile(side, file) {
     msgEl.innerHTML = '<div class="msg msg-info">Uploading…</div>';
     try {
       const ext = '.' + file.name.split('.').pop().toLowerCase();
-      const res = await fetch('/upload-logo', {
+      const res = await fetch(_uploadLogoPath, {
         method: 'POST', headers: headers(),
         body: JSON.stringify({ side, filename: file.name, data: dataUrl })
       });
@@ -1307,7 +1327,7 @@ async function confirmGame() {
     });
     await action('set_lineup', { home: homeLineup, away: awayLineup });
     msg.innerHTML = '<div class="msg msg-ok">✅ Game saved! Redirecting to controller…</div>';
-    setTimeout(() => { window.location.href = '/controller?token=' + encodeURIComponent(TOKEN); }, 1500);
+    setTimeout(() => { window.location.href = _controllerPath; }, 1500);
     return false; // prevent goNext from advancing
   } catch(e) {
     msg.innerHTML = `<div class="msg msg-err">Save failed: ${e.message}</div>`;

@@ -271,7 +271,8 @@ textarea:focus{outline:none;border-color:var(--blue);}
 <div class="card" style="border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.04);margin-top:18px;">
   <div class="card-title" style="color:var(--red);">⚠ New Game</div>
   <p style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px;line-height:1.5;">Resets score, timer, fouls, and penalties back to zero. Team names and lineups are kept.</p>
-  <button class="btn btn-red" style="width:100%" onclick="confirmNewGame()">⟳ Reset for New Game</button>
+  <button class="btn btn-red" style="width:100%;margin-bottom:8px;" onclick="confirmNewGame()">⟳ Reset for New Game</button>
+  <a id="setupWizardLink" href="#" style="display:block;text-align:center;font-size:12px;color:rgba(61,130,246,.7);text-decoration:none;padding:4px 0;">⚙ Change teams / lineups (Game Setup)</a>
 </div>
 
 <!-- OVERLAYS -->
@@ -596,6 +597,13 @@ connectSSE();
         container.appendChild(btn);
       }
     }
+  }
+  if (cfg.wizardPath) {
+    const link = document.getElementById('setupWizardLink');
+    if (link) link.href = cfg.wizardPath;
+  } else {
+    const link = document.getElementById('setupWizardLink');
+    if (link) link.style.display = 'none';
   }
 })();
 

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started - Futsalplay.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #050B18; --blue: #3D82F6; --blue-dark: #2563EB;
+      --white: #ffffff; --grey: #F4F6FA; --text: #1a2340; --muted: #5a6580;
+      --border: #e4eaf5; --green: #22c55e;
+    }
+    body { font-family: 'Montserrat', sans-serif; background: var(--grey); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    nav {
+      background: var(--white); border-bottom: 1px solid var(--border);
+      padding: 0 5%; height: 72px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .nav-logo img { height: 42px; width: auto; }
+    .nav-link { font-size: 0.85rem; font-weight: 600; color: var(--blue); text-decoration: none; }
+    .nav-link:hover { color: var(--blue-dark); }
+
+    .page-hero {
+      background: var(--navy); color: #fff;
+      padding: 56px 5% 48px;
+      text-align: center;
+    }
+    .page-hero .badge {
+      display: inline-block; background: rgba(61,130,246,.15); border: 1px solid rgba(61,130,246,.3);
+      color: #7db8f7; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 5px 14px; border-radius: 20px; margin-bottom: 20px;
+    }
+    .page-hero h1 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 800; margin-bottom: 14px;
+    }
+    .page-hero p { color: rgba(255,255,255,.6); font-size: 1rem; max-width: 520px; margin: 0 auto; line-height: 1.7; }
+
+    main { flex: 1; max-width: 780px; margin: 0 auto; width: 100%; padding: 52px 20px 80px; }
+
+    /* ── Section ── */
+    .section { margin-bottom: 52px; }
+    .section-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue); color: #fff;
+      font-size: 0.85rem; font-weight: 800; flex-shrink: 0; margin-right: 12px;
+    }
+    .section-heading {
+      display: flex; align-items: center; margin-bottom: 20px;
+    }
+    .section-heading h2 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 1.4rem; font-weight: 800;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white); border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 24px 28px; margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 12px;
+    }
+
+    /* ── Step list ── */
+    .steps { list-style: none; }
+    .steps li {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 13px 0; border-bottom: 1px solid var(--border);
+    }
+    .steps li:last-child { border-bottom: none; padding-bottom: 0; }
+    .step-dot {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--grey); border: 2px solid var(--border);
+      color: var(--blue); font-size: 0.75rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;
+    }
+    .step-text { font-size: 0.9rem; line-height: 1.65; color: var(--text); flex: 1; }
+    .step-text strong { color: var(--text); }
+    .step-text .hint { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Inline code / URL ── */
+    code {
+      background: var(--grey); border: 1px solid var(--border);
+      border-radius: 5px; padding: 2px 7px;
+      font-size: 0.82rem; font-family: monospace; color: var(--text);
+      word-break: break-all;
+    }
+
+    /* ── Browser source table ── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th {
+      text-align: left; padding: 9px 12px;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted);
+      border-bottom: 2px solid var(--border);
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    td:first-child { font-weight: 600; white-space: nowrap; }
+
+    /* ── Note box ── */
+    .note {
+      background: rgba(61,130,246,.06); border: 1px solid rgba(61,130,246,.2);
+      border-radius: 10px; padding: 14px 18px;
+      font-size: 0.85rem; color: var(--muted); line-height: 1.65;
+      margin-top: 14px;
+    }
+    .note strong { color: var(--text); }
+
+    /* ── Controller grid ── */
+    .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ctrl-item { background: var(--grey); border-radius: 10px; padding: 14px 16px; }
+    .ctrl-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); margin-bottom: 6px; }
+    .ctrl-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.55; }
+
+    /* ── Troubleshooting ── */
+    .trouble-item { padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .trouble-item:last-child { border-bottom: none; }
+    .trouble-q { font-weight: 700; font-size: 0.9rem; margin-bottom: 5px; }
+    .trouble-a { font-size: 0.87rem; color: var(--muted); line-height: 1.6; }
+
+    /* ── CTA ── */
+    .cta-band {
+      background: var(--navy); color: #fff;
+      padding: 48px 5%; text-align: center;
+    }
+    .cta-band h2 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 1.6rem; font-weight: 800; margin-bottom: 12px;
+    }
+    .cta-band p { color: rgba(255,255,255,.6); font-size: 0.92rem; margin-bottom: 24px; }
+    .btn {
+      display: inline-block; padding: 13px 32px;
+      background: var(--blue); color: #fff;
+      border-radius: 10px; text-decoration: none;
+      font-weight: 700; font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: var(--blue-dark); }
+
+    footer {
+      text-align: center; padding: 28px; font-size: 0.8rem; color: #9aaabf;
+      border-top: 1px solid var(--border); background: var(--white);
+    }
+    footer a { color: #7a8fa8; text-decoration: none; }
+
+    @media (max-width: 580px) {
+      .ctrl-grid { grid-template-columns: 1fr; }
+      .card { padding: 18px 16px; }
+      main { padding: 36px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/"><img src="/img/logo.png" alt="Futsalplay.live"></a>
+  <a href="/signup" class="nav-link">Get started →</a>
+</nav>
+
+<div class="page-hero">
+  <div class="badge">Getting started</div>
+  <h1>Up and running in 15 minutes</h1>
+  <p>Everything you need to go from signup to a live stream with professional overlays.</p>
+</div>
+
+<main>
+
+  <!-- ── SECTION 1: What you received ── -->
+  <div class="section">
+    <div class="section-heading">
+      <div class="section-num">1</div>
+      <h2>Check your email</h2>
+    </div>
+    <div class="card">
+      <div class="card-title">After payment you receive three links</div>
+      <ul class="steps">
+        <li>
+          <div class="step-dot">W</div>
+          <div class="step-text">
+            <strong>Game Setup Wizard</strong> — start here before your first game. Enter your team names, lineups, and match info. You can run this again before every game.
+            <div class="hint">Save this link somewhere easy to find.</div>
+          </div>
+        </li>
+        <li>
+          <div class="step-dot">C</div>
+          <div class="step-text">
+            <strong>Controller link</strong> — open this on your phone or tablet on match day. This is what you use to control the scoreboard, timer, goals, and overlays during the game.
+            <div class="hint">Works on any device, any network. No app to install.</div>
+          </div>
+        </li>
+        <li>
+          <div class="step-dot">O</div>
+          <div class="step-text">
+            <strong>Overlay URL</strong> — paste this into OBS or Streamlabs as a Browser Source. It contains your scoreboard, lineup, lower third, and all other overlays in one URL.
+            <div class="hint">You will add this once in OBS and never need to change it.</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+    <div class="note">
+      <strong>Keep these links safe.</strong> Anyone with your controller link can manage your live scoreboard. If you ever lose them, write to <strong>info@futsalplay.live</strong> and we will resend them.
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: OBS setup ── -->
+  <div class="section">
+    <div class="section-heading">
+      <div class="section-num">2</div>
+      <h2>Add overlays in OBS or Streamlabs</h2>
+    </div>
+    <div class="card">
+      <div class="card-title">Add one Browser Source per overlay</div>
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:16px;line-height:1.6;">Your overlay URL covers all overlay types. You add it multiple times with different names — each instance knows which overlay to show based on how you named it in OBS.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Name in OBS</th>
+            <th>URL to paste</th>
+            <th>Size</th>
+            <th>Scene</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Scoreboard</td>
+            <td>Your overlay URL (from email) — change <code>/overlay</code> to <code>/scoreboard</code></td>
+            <td>1920×1080</td>
+            <td>Main / Live</td>
+          </tr>
+          <tr>
+            <td>Lower Third</td>
+            <td>Same URL, change ending to <code>/lowerthird</code></td>
+            <td>1920×1080</td>
+            <td>Main / Live</td>
+          </tr>
+          <tr>
+            <td>Lineup</td>
+            <td>Same URL, change ending to <code>/lineup</code></td>
+            <td>1920×1080</td>
+            <td>Main / Live</td>
+          </tr>
+          <tr>
+            <td>Starting Soon</td>
+            <td>Same URL, change ending to <code>/startingsoon</code></td>
+            <td>1920×1080</td>
+            <td>Pre-match</td>
+          </tr>
+          <tr>
+            <td>BRB</td>
+            <td>Same URL, change ending to <code>/brb</code></td>
+            <td>1920×1080</td>
+            <td>Break</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Browser Source settings for each source</div>
+      <ul class="steps">
+        <li>
+          <div class="step-dot">1</div>
+          <div class="step-text">In OBS, click <strong>+</strong> under Sources and choose <strong>Browser Source</strong>.</div>
+        </li>
+        <li>
+          <div class="step-dot">2</div>
+          <div class="step-text">Paste your overlay URL into the <strong>URL</strong> field. Change the last part to match the overlay type (scoreboard, lowerthird, etc.).</div>
+        </li>
+        <li>
+          <div class="step-dot">3</div>
+          <div class="step-text">Set <strong>Width</strong> to <code>1920</code> and <strong>Height</strong> to <code>1080</code>.</div>
+        </li>
+        <li>
+          <div class="step-dot">4</div>
+          <div class="step-text">Paste this into the <strong>Custom CSS</strong> field to make the background transparent:
+            <div style="margin-top:8px;"><code>body { background-color: rgba(0, 0, 0, 0) !important; }</code></div>
+          </div>
+        </li>
+        <li>
+          <div class="step-dot">5</div>
+          <div class="step-text">Click <strong>OK</strong>. Repeat for each overlay type.</div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="note">
+      You do not need to switch OBS scenes to control overlay visibility. All overlays are toggled directly from the controller on your phone — just keep all browser sources active in your main scene.
+    </div>
+  </div>
+
+  <!-- ── SECTION 3: FOGIS bookmarklet ── -->
+  <div class="section">
+    <div class="section-heading">
+      <div class="section-num">3</div>
+      <h2>Install the FOGIS bookmarklet (optional)</h2>
+    </div>
+    <div class="card">
+      <div class="card-title">For clubs registered on minfotboll.se</div>
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        If your games are listed on <strong style="color:var(--text);">minfotboll.se</strong> (the Swedish Football Federation system), the bookmarklet lets you load team rosters, player names, and match info into your overlays automatically in one click. Skip this section if your club does not use FOGIS.
+      </p>
+      <ul class="steps">
+        <li>
+          <div class="step-dot">1</div>
+          <div class="step-text">Open your <strong>Game Setup Wizard</strong> link (from the email) in Google Chrome on the stream PC.</div>
+        </li>
+        <li>
+          <div class="step-dot">2</div>
+          <div class="step-text">In Step 1 of the wizard, choose <strong>Yes, on FOGIS</strong>. The bookmarklet installation instructions appear on the next screen.</div>
+        </li>
+        <li>
+          <div class="step-dot">3</div>
+          <div class="step-text">Press <strong>Ctrl+Shift+B</strong> to show the bookmarks bar, then follow the on-screen steps to save the bookmarklet. Do this once.</div>
+        </li>
+        <li>
+          <div class="step-dot">4</div>
+          <div class="step-text">On match day: log in to minfotboll.se, go to the game page, and click the bookmarklet. The wizard (or controller) updates instantly with team names, logos, lineups, and venue info.</div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── SECTION 4: Game day ── -->
+  <div class="section">
+    <div class="section-heading">
+      <div class="section-num">4</div>
+      <h2>Match day checklist</h2>
+    </div>
+    <div class="card">
+      <ul class="steps">
+        <li>
+          <div class="step-dot">1</div>
+          <div class="step-text"><strong>Open the Game Setup Wizard</strong> on the stream PC. Enter team names, lineups, and kick-off time. The wizard takes 3-4 minutes and sends everything to the overlays automatically.</div>
+        </li>
+        <li>
+          <div class="step-dot">2</div>
+          <div class="step-text"><strong>Open the Controller on your phone</strong>. Use the controller link from the email. Bookmark it so it is one tap away on match day. No app or login required.</div>
+        </li>
+        <li>
+          <div class="step-dot">3</div>
+          <div class="step-text"><strong>Test your upload speed</strong> at speedtest.net on the hall's Wi-Fi. Use 70% of the result as your OBS bitrate. 4 Mbps upload gives a solid 720p30 stream at 2500 kbps.</div>
+        </li>
+        <li>
+          <div class="step-dot">4</div>
+          <div class="step-text"><strong>Show the Starting Soon overlay</strong> from the controller while waiting for kick-off. It displays a live countdown, team logos, league, and venue.</div>
+        </li>
+        <li>
+          <div class="step-dot">5</div>
+          <div class="step-text"><strong>At kick-off</strong>: hide Starting Soon, confirm the period (1st Half), start the timer. From now on manage everything from the controller.</div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── SECTION 5: Controller ── -->
+  <div class="section">
+    <div class="section-heading">
+      <div class="section-num">5</div>
+      <h2>Using the controller during the game</h2>
+    </div>
+    <div class="ctrl-grid">
+      <div class="ctrl-item">
+        <div class="ctrl-label">Overlays</div>
+        <div class="ctrl-desc">Tap any row to show or hide that overlay instantly. No need to touch OBS.</div>
+      </div>
+      <div class="ctrl-item">
+        <div class="ctrl-label">Timer</div>
+        <div class="ctrl-desc">Start, stop, reset. Use Adjust to correct drift against the hall's official clock.</div>
+      </div>
+      <div class="ctrl-item">
+        <div class="ctrl-label">Goals and fouls</div>
+        <div class="ctrl-desc">Tap + Goal or + Foul per team. Undo is always one tap away. Fouls reset automatically at half time.</div>
+      </div>
+      <div class="ctrl-item">
+        <div class="ctrl-label">Lower Third</div>
+        <div class="ctrl-desc">Set the announcement text, choose a duration, tap Show. Tap player names in the quick-pick list for goal announcements.</div>
+      </div>
+      <div class="ctrl-item">
+        <div class="ctrl-label">Red cards (2-min)</div>
+        <div class="ctrl-desc">Enter the player name, tap Home or Away. The countdown appears on the scoreboard and clears on the next opposing goal.</div>
+      </div>
+      <div class="ctrl-item">
+        <div class="ctrl-label">Half time</div>
+        <div class="ctrl-desc">Tap Half Time to stop the timer and show HALF TIME on screen. Tap 2nd Half when play resumes.</div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:16px;">
+      <strong>Keyboard shortcuts</strong> (when the controller page is focused on a laptop): <code>Space</code> starts/stops the timer, <code>1</code> and <code>2</code> add goals, <code>Q</code> and <code>W</code> undo goals, <code>F</code> and <code>G</code> add fouls.
+    </div>
+  </div>
+
+  <!-- ── SECTION 6: Troubleshooting ── -->
+  <div class="section">
+    <div class="section-heading">
+      <div class="section-num">6</div>
+      <h2>Troubleshooting</h2>
+    </div>
+    <div class="card">
+      <div class="trouble-item">
+        <div class="trouble-q">Overlays not updating in OBS</div>
+        <div class="trouble-a">Right-click the Browser Source in OBS and choose <strong>Refresh</strong>. Make sure the URL is correct and includes your token (the long string after <code>?token=</code>).</div>
+      </div>
+      <div class="trouble-item">
+        <div class="trouble-q">Controller says "reconnecting"</div>
+        <div class="trouble-a">Reload the controller page. Make sure you opened the full URL from the email including the token. The controller requires an active internet connection.</div>
+      </div>
+      <div class="trouble-item">
+        <div class="trouble-q">Overlay background is black, not transparent</div>
+        <div class="trouble-a">In the Browser Source properties, paste <code>body { background-color: rgba(0, 0, 0, 0) !important; }</code> into the Custom CSS field and click OK.</div>
+      </div>
+      <div class="trouble-item">
+        <div class="trouble-q">I lost my links</div>
+        <div class="trouble-a">Write to <strong>info@futsalplay.live</strong> from the email you signed up with and we will resend them immediately.</div>
+      </div>
+      <div class="trouble-item">
+        <div class="trouble-q">Timer is running but the scoreboard still shows the old time</div>
+        <div class="trouble-a">Refresh the Browser Source in OBS. The overlay reconnects to the server automatically after a refresh.</div>
+      </div>
+      <div class="trouble-item">
+        <div class="trouble-q">FOGIS bookmarklet gives an error</div>
+        <div class="trouble-a">Make sure you are logged in to minfotboll.se and on the actual game page (the URL contains a 6-digit game ID). The bookmarklet must be installed from your wizard link, not from a saved HTML file.</div>
+      </div>
+      <div class="trouble-item">
+        <div class="trouble-q">Something else is not working</div>
+        <div class="trouble-a">Write to <strong>info@futsalplay.live</strong> with a short description of what is happening and we will sort it out.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div class="cta-band">
+  <h2>Ready to go live?</h2>
+  <p>Set up your club in minutes. No hardware, no software, no setup fees.</p>
+  <a href="/signup" class="btn">Start your club — €12/month</a>
+</div>
+
+<footer>
+  <a href="/">futsalplay.live</a> &nbsp;|&nbsp; <a href="/guide">Guide</a> &nbsp;|&nbsp; <a href="mailto:info@futsalplay.live">info@futsalplay.live</a>
+</footer>
+
+</body>
+</html>
