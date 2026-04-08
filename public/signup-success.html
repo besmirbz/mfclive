@@ -17,7 +17,10 @@
       padding: 0 5%; height: 72px;
       display: flex; align-items: center;
     }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
     .nav-logo img { height: 42px; width: auto; }
+    .nav-wordmark { font-family: 'League Spartan', sans-serif; font-weight: 800; font-size: 1.25rem; color: var(--navy); letter-spacing: -0.01em; line-height: 1; }
+    .nav-wordmark .live { color: var(--blue); }
 
     main {
       flex: 1; display: flex; align-items: center; justify-content: center;
@@ -72,7 +75,7 @@
 <body>
 
   <nav>
-    <a href="/"><img class="nav-logo" src="/img/logo.svg" alt="Futsalplay.live"></a>
+    <a class="nav-logo" href="/"><img src="/img/logo.svg" alt="Futsalplay.live"><span class="nav-wordmark">FutsalPlay<span class="live">.live</span></span></a>
   </nav>
 
   <main>

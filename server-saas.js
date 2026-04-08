@@ -1069,7 +1069,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
               ].join('\n'),
               html: `
                 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1a2340;">
-                  <img src="https://futsalplay.live/img/logo.png" alt="Futsalplay.live" style="height:60px;margin-bottom:24px;">
+                  <p style="font-family:'League Spartan',Arial,sans-serif;font-size:1.6rem;font-weight:800;letter-spacing:-0.01em;margin:0 0 24px;line-height:1;">FutsalPlay<span style="color:#3D82F6;">.live</span></p>
                   <h2 style="font-size:1.4rem;margin-bottom:8px;">Your club is ready!</h2>
                   <p style="color:#5a6580;">Hi, welcome to Futsalplay.live. Here are your links for <strong>${esc(clubName)}</strong>.</p>
 

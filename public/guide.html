@@ -35,6 +35,8 @@
     }
     .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
     .nav-logo img { height: 42px; width: auto; }
+    .nav-wordmark { font-family: 'League Spartan', sans-serif; font-weight: 800; font-size: 1.25rem; color: var(--navy); letter-spacing: -0.01em; line-height: 1; }
+    .nav-wordmark .live { color: var(--blue); }
     .nav-links { display: flex; gap: 32px; list-style: none; }
     .nav-links a { font-weight: 500; font-size: 0.9rem; color: var(--muted); text-decoration: none; transition: color 0.2s; }
     .nav-links a:hover { color: var(--blue); }
@@ -210,6 +212,7 @@
   <nav>
     <a class="nav-logo" href="/">
       <img src="/img/logo.svg" alt="Futsalplay.live">
+      <span class="nav-wordmark">FutsalPlay<span class="live">.live</span></span>
     </a>
     <ul class="nav-links">
       <li><a href="/#how">How it works</a></li>
