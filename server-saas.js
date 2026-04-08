@@ -44,8 +44,9 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY || '');
 const nodemailer = require('nodemailer');
 const mailer = nodemailer.createTransport({
   host: 'smtp.zoho.eu',
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false,
+  requireTLS: true,
   auth: {
     user: 'info@futsalplay.live',
     pass: process.env.SMTP_PASS || '',
