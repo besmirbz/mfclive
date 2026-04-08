@@ -14,10 +14,9 @@ const OUT_DIR  = path.join(__dirname, '../public/img');
 
 const svgSrc = fs.readFileSync(SVG_PATH, 'utf8');
 
-// Scale factor — 4× the 1024×544 viewBox = 4096×2176
-const SCALE  = 4;
-const W      = 1024 * SCALE;
-const H      = 544  * SCALE;
+// viewBox is 366×366 — export as square at 4096×4096
+const W = 4096;
+const H = 4096;
 
 // Wrap SVG in a coloured rect to produce background variants
 function withBackground(color) {
@@ -46,5 +45,5 @@ async function exportPng(svgString, filename) {
   // logo_light.png — white background
   await exportPng(withBackground('#ffffff'), 'logo_light.png');
 
-  console.log('\nDone. Files written to .img/');
+  console.log('\nDone. Files written to public/img/');
 })();
