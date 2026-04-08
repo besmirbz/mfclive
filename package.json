@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "qrcode": "^1.5.4",
-    "better-sqlite3": "^9.4.3"
+    "better-sqlite3": "^9.4.3",
+    "stripe": "^16.0.0",
+    "nodemailer": "^6.9.0"
   }
 }

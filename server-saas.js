@@ -34,8 +34,23 @@ const os     = require('os');
 const https  = require('https');
 
 // ── SQLite (better-sqlite3 — synchronous, zero async overhead) ─────────────────
-// Install: npm install better-sqlite3
 const Database = require('better-sqlite3');
+
+// ── Stripe (payments) ─────────────────────────────────────────────────────────
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY || '');
+
+// ── Nodemailer (transactional email via Zoho SMTP) ────────────────────────────
+const nodemailer = require('nodemailer');
+const mailer = nodemailer.createTransport({
+  host: 'smtp.zoho.eu',
+  port: 465,
+  secure: true,
+  auth: {
+    user: 'info@futsalplay.live',
+    pass: process.env.SMTP_PASS || '',
+  },
+});
 
 const DB_PATH    = path.join(os.homedir(), '.mfclive-saas', 'saas.db');
 const LOGOS_DIR  = path.join(os.homedir(), '.mfclive-saas', 'logos');
@@ -761,6 +776,156 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     }
 
     res.writeHead(404); res.end('Not found');
+    return;
+  }
+
+  // ── Signup: serve form ────────────────────────────────────────────────────────
+  if (route === '/signup') {
+    const fp = path.join(PUBLIC_DIR, 'signup.html');
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : '<h1>Signup page not found</h1>');
+    return;
+  }
+
+  // ── Signup: create Stripe Checkout Session ────────────────────────────────────
+  if (route === '/signup/create-session' && req.method === 'POST') {
+    let body = '';
+    req.on('data', d => { body += d; if (body.length > 4096) { res.writeHead(413); res.end(); req.socket.destroy(); } });
+    req.on('end', async () => {
+      try {
+        const { clubName, email } = JSON.parse(body || '{}');
+        if (!clubName || !email) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Club name and email are required.' })); return; }
+
+        const session = await stripe.checkout.sessions.create({
+          mode:           'subscription',
+          payment_method_types: ['card'],
+          customer_email: email.trim(),
+          line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+          metadata:   { clubName: clubName.trim().slice(0, 80), email: email.trim() },
+          success_url: `https://futsalplay.live/signup/success`,
+          cancel_url:  `https://futsalplay.live/signup`,
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ url: session.url }));
+      } catch (e) {
+        console.error('[stripe] session creation failed:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Could not create payment session. Please try again.' }));
+      }
+    });
+    return;
+  }
+
+  // ── Signup: success page ──────────────────────────────────────────────────────
+  if (route === '/signup/success') {
+    const fp = path.join(PUBLIC_DIR, 'signup-success.html');
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : '<h1>Payment confirmed. Check your email.</h1>');
+    return;
+  }
+
+  // ── Stripe webhook ────────────────────────────────────────────────────────────
+  if (route === '/webhooks/stripe' && req.method === 'POST') {
+    const chunks = [];
+    req.on('data', d => chunks.push(d));
+    req.on('end', async () => {
+      const rawBody = Buffer.concat(chunks);
+      const sig     = req.headers['stripe-signature'];
+      const secret  = process.env.STRIPE_WEBHOOK_SECRET;
+
+      let event;
+      try {
+        event = secret
+          ? stripe.webhooks.constructEvent(rawBody, sig, secret)
+          : JSON.parse(rawBody.toString());
+      } catch (e) {
+        console.error('[stripe webhook] signature verification failed:', e.message);
+        res.writeHead(400); res.end('Webhook signature invalid');
+        return;
+      }
+
+      if (event.type === 'checkout.session.completed') {
+        const session  = event.data.object;
+        const clubName = session.metadata && session.metadata.clubName;
+        const email    = session.metadata && session.metadata.email;
+
+        if (clubName && email) {
+          try {
+            // Generate slug and ensure uniqueness
+            const baseSlug = clubName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+            let slug = baseSlug, counter = 2;
+            while (db.prepare('SELECT 1 FROM clubs WHERE slug = ?').get(slug)) {
+              slug = `${baseSlug}-${counter++}`;
+            }
+            const secret = crypto.randomBytes(8).toString('hex');
+            const cfg    = JSON.stringify({ accentColour: '#3D82F6', numberOfPeriods: 2, periodDuration: 20 });
+            db.prepare('INSERT INTO clubs (slug, name, secret, config) VALUES (?, ?, ?, ?)').run(slug, clubName.slice(0, 80), secret, cfg);
+            const newClub = db.prepare('SELECT * FROM clubs WHERE slug = ?').get(slug);
+            const room    = createRoom(newClub);
+            rooms.set(slug, room);
+
+            const controllerUrl = `https://futsalplay.live/clubs/${slug}/controller?token=${secret}`;
+            const overlayUrl    = `https://futsalplay.live/clubs/${slug}/overlay?token=${secret}`;
+
+            await mailer.sendMail({
+              from:    '"Futsalplay.live" <info@futsalplay.live>',
+              to:      email,
+              subject: 'Your FutsalPlay club is ready',
+              text: [
+                `Hi,`,
+                ``,
+                `Your club "${clubName}" is live on Futsalplay.live.`,
+                ``,
+                `Controller (open on any device to manage the game):`,
+                controllerUrl,
+                ``,
+                `Overlay URL (add as a browser source in OBS or Streamlabs):`,
+                overlayUrl,
+                ``,
+                `Keep these links safe. Anyone with the link can access your controller.`,
+                ``,
+                `Questions? Reply to this email or write to info@futsalplay.live.`,
+                ``,
+                `Welcome aboard,`,
+                `The FutsalPlay team`,
+              ].join('\n'),
+              html: `
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1a2340;">
+                  <img src="https://futsalplay.live/img/logo.png" alt="Futsalplay.live" style="height:60px;margin-bottom:24px;">
+                  <h2 style="font-size:1.4rem;margin-bottom:8px;">Your club is ready!</h2>
+                  <p style="color:#5a6580;">Hi, welcome to Futsalplay.live. Here are your links for <strong>${esc(clubName)}</strong>.</p>
+
+                  <div style="background:#F4F6FA;border-radius:10px;padding:20px 24px;margin:24px 0;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Controller</p>
+                    <p style="font-size:0.82rem;color:#5a6580;margin-bottom:8px;">Open on any phone or tablet to manage your live game.</p>
+                    <a href="${controllerUrl}" style="display:inline-block;background:#3D82F6;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Open Controller</a>
+                    <p style="font-size:0.75rem;color:#9aaabf;margin-top:10px;word-break:break-all;">${controllerUrl}</p>
+                  </div>
+
+                  <div style="background:#F4F6FA;border-radius:10px;padding:20px 24px;margin:24px 0;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Overlay URL</p>
+                    <p style="font-size:0.82rem;color:#5a6580;margin-bottom:8px;">Add this as a browser source in OBS or Streamlabs (1920x1080).</p>
+                    <p style="font-size:0.75rem;color:#9aaabf;word-break:break-all;">${overlayUrl}</p>
+                  </div>
+
+                  <p style="font-size:0.85rem;color:#5a6580;">Keep these links safe. Anyone with the link can access your controller.</p>
+                  <p style="font-size:0.85rem;color:#5a6580;margin-top:16px;">Questions? Reply to this email and we will help you get set up.</p>
+                  <hr style="border:none;border-top:1px solid #e4eaf5;margin:28px 0;">
+                  <p style="font-size:0.78rem;color:#9aaabf;">Futsalplay.live &mdash; You play, we stream it.</p>
+                </div>
+              `,
+            });
+
+            console.log(`[signup] Club created: ${slug} (${email})`);
+          } catch (e) {
+            console.error('[signup] club creation or email failed:', e.message);
+          }
+        }
+      }
+
+      res.writeHead(200); res.end('ok');
+    });
     return;
   }
 
