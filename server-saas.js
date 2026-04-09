@@ -582,6 +582,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   const url   = new URL(req.url, `http://localhost:${PORT}`);
   const route = url.pathname;
 
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MFCLIVE-Token, X-MFCLIVE-Admin');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }

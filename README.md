@@ -69,6 +69,22 @@ module.exports = {
 
 After editing ecosystem.config.js: `pm2 delete mfclive-saas && pm2 start ecosystem.config.js && pm2 save`
 
+### Switching between prod and test (Stripe)
+
+Two ecosystem configs are kept on the VPS: `ecosystem.config.js_ori` (prod) and `ecosystem.config.js_test` (test).
+
+**Prod → Test:**
+```bash
+mv ecosystem.config.js ecosystem.config.js_ori && mv ecosystem.config.js_test ecosystem.config.js && pm2 delete mfclive-saas && pm2 start ecosystem.config.js
+```
+
+**Test → Prod:**
+```bash
+mv ecosystem.config.js ecosystem.config.js_test && mv ecosystem.config.js_ori ecosystem.config.js && pm2 delete mfclive-saas && pm2 start ecosystem.config.js
+```
+
+Test card: `4242 4242 4242 4242`, any future expiry, any CVC.
+
 ### Admin API
 
 ```
