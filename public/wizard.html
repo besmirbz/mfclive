@@ -376,20 +376,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button class="btn btn-primary" onclick="fogisOpenTab()">Open tab &amp; wait for bookmarklet</button>
+        <button class="btn btn-primary" id="btnLoadFogis" onclick="loadFromFogis()">Load Roster</button>
         <button class="skip-link" onclick="fogisChoose('no')">← Change answer</button>
       </div>
 
       <div id="fogisWaiting" class="fogis-waiting hidden">
         <div class="spinner"></div>
-        <h3>Waiting for bookmarklet…</h3>
-        <p>
-          In the new tab, click the <strong style="color:#fff">⚽ Load Roster</strong> bookmarklet.<br>
-          This screen will update automatically when done.
-        </p>
-        <div class="elapsed" id="fogisElapsed"></div>
-        <br>
-        <button class="skip-link" onclick="fogisCancel()">Cancel and enter manually</button>
+        <h3>Loading roster…</h3>
       </div>
 
       <div id="fogisSuccess" class="fogis-success hidden">
@@ -611,6 +604,7 @@ const _cfg = window._MFCLIVE_CONFIG || {};
 const _actionPath         = _cfg.actionPath         || '/action';
 const _statePath          = _cfg.statePath          || '/api/state';
 const _configPath         = _cfg.configPath         || '/api/config';
+const _importRosterPath   = _cfg.importRosterPath   || '/import-roster';
 const _uploadLogoPath     = _cfg.uploadLogoPath     || '/upload-logo';
 const _uploadClubLogoPath = _cfg.uploadClubLogoPath || '';
 const _controllerPath     = _cfg.controllerPath     || ('/controller?token=' + encodeURIComponent(TOKEN));
@@ -643,10 +637,6 @@ const logoRefs = { home: '', away: '' };
 let rowId = 0;
 
 // FOGIS polling
-let fogisPoller = null;
-let fogisSnapshot = '';
-let fogisElapsedSec = 0;
-let fogisElapsedTimer = null;
 
 // ── Connection bar ─────────────────────────────────────────────────────────────
 let _connUrl = '';
@@ -1006,76 +996,55 @@ function fogisChoose(choice) {
   }
 }
 
-function fogisOpenTab() {
-  const rawUrl = document.getElementById('fogisUrl').value.trim();
-  const gameId = extractFogisId(rawUrl);
-  if (!gameId) {
-    document.getElementById('fogisErr').textContent = 'Could not find a game ID in that URL. Make sure you copied the full minfotboll.se game page URL.';
-    document.getElementById('fogisErr').classList.remove('hidden');
-    return;
-  }
-  document.getElementById('fogisErr').classList.add('hidden');
-
-  // Snapshot current state signature so we can detect when it changes
-  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
-    .then(r => r.json())
-    .then(st => {
-      fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
-      window.open(rawUrl, '_blank');
-      document.getElementById('fogisWaiting').classList.remove('hidden');
-      fogisElapsedSec = 0;
-      fogisElapsedTimer = setInterval(() => {
-        fogisElapsedSec++;
-        document.getElementById('fogisElapsed').textContent = `Waiting… ${fogisElapsedSec}s`;
-      }, 1000);
-      fogisPoller = setInterval(pollForRoster, 1500);
-    })
-    .catch(() => {
-      window.open(rawUrl, '_blank');
-      document.getElementById('fogisWaiting').classList.remove('hidden');
-      fogisPoller = setInterval(pollForRoster, 1500);
-    });
-}
-
 function extractFogisId(url) {
   const m = url.match(/(\d{6,})/);
   return m ? m[1] : null;
 }
 
-function pollForRoster() {
-  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
-    .then(r => r.json())
-    .then(st => {
-      const sig = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
-      if (sig !== fogisSnapshot && (st.homePlayers || []).length > 0) {
-        fogisStopPolling();
-        fogisLoadSuccess(st);
-      }
-    })
-    .catch(() => { /* ignore transient errors */ });
-}
+function loadFromFogis() {
+  const rawUrl = document.getElementById('fogisUrl').value.trim();
+  const gameId = extractFogisId(rawUrl);
+  const errEl  = document.getElementById('fogisErr');
 
-function fogisStopPolling() {
-  if (fogisPoller)      { clearInterval(fogisPoller);      fogisPoller      = null; }
-  if (fogisElapsedTimer){ clearInterval(fogisElapsedTimer); fogisElapsedTimer = null; }
-  document.getElementById('fogisWaiting').classList.add('hidden');
-}
+  if (!gameId) {
+    errEl.textContent = 'Could not find a game ID in that URL. Make sure you copied the full minfotboll.se game page URL.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  errEl.classList.add('hidden');
 
-function fogisLoadSuccess(st) {
-  const hp = (st.homePlayers  || []).length;
-  const ap = (st.awayPlayers  || []).length;
-  document.getElementById('fogisSuccess').classList.remove('hidden');
-  document.getElementById('fogisSuccessMsg').textContent =
-    `${st.homeTeam} vs ${st.awayTeam} · ${hp} home + ${ap} away players · ${st.arena || ''}`;
-  prefillFromState(st);
-  // Auto-advance after 2 seconds
-  setTimeout(() => goTo(1), 2000);
-}
-
-function fogisCancel() {
-  fogisStopPolling();
-  document.getElementById('fogisWaiting').classList.add('hidden');
+  const btn = document.getElementById('btnLoadFogis');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  document.getElementById('fogisWaiting').classList.remove('hidden');
   document.getElementById('fogisSuccess').classList.add('hidden');
+
+  fetch(_importRosterPath, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-MFCLIVE-Token': TOKEN },
+    body: JSON.stringify({ gameId }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) throw new Error(d.error);
+      document.getElementById('fogisWaiting').classList.add('hidden');
+      document.getElementById('fogisSuccess').classList.remove('hidden');
+      document.getElementById('fogisSuccessMsg').textContent =
+        `${d.homeTeam} vs ${d.awayTeam} · ${d.homePlayers} home + ${d.awayPlayers} away players · ${d.arena || ''}`;
+      fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
+        .then(r => r.json()).then(prefillFromState).catch(() => {});
+      setTimeout(() => goTo(1), 2000);
+    })
+    .catch(e => {
+      document.getElementById('fogisWaiting').classList.add('hidden');
+      errEl.textContent = '❌ ' + e.message;
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Load Roster';
+    });
+}
+
+function fogisUseExisting() {
   goTo(1);
 }
 
