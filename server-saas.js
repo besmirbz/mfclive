@@ -910,6 +910,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       '/':             'controller.html',
       '/controller':   'controller.html',
       '/wizard':       'wizard.html',
+      '/bookmarklet':  'bookmarklet.html',
       '/overlay':      'overlays/overlay.html',
       '/scoreboard':   'overlays/overlay.html',
       '/lowerthird':   'overlays/overlay.html',
@@ -937,6 +938,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         uploadLogoPath:    `/clubs/${room.slug}/upload-logo`,
         controllerPath:    `/clubs/${room.slug}/controller?token=${room.secret}`,
         wizardPath:        `/clubs/${room.slug}/wizard?token=${room.secret}`,
+        bookmarkletPath:   `/clubs/${room.slug}/bookmarklet?token=${room.secret}`,
         logoHomePath:      `/clubs/${room.slug}/logo/home`,
         logoAwayPath:      `/clubs/${room.slug}/logo/away`,
       });
@@ -1039,9 +1041,10 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
             const room    = createRoom(newClub);
             rooms.set(slug, room);
 
-            const controllerUrl = `https://futsalplay.live/clubs/${slug}/controller?token=${secret}`;
-            const wizardUrl     = `https://futsalplay.live/clubs/${slug}/wizard?token=${secret}`;
-            const overlayUrl    = `https://futsalplay.live/clubs/${slug}/overlay?token=${secret}`;
+            const controllerUrl   = `https://futsalplay.live/clubs/${slug}/controller?token=${secret}`;
+            const wizardUrl       = `https://futsalplay.live/clubs/${slug}/wizard?token=${secret}`;
+            const overlayUrl      = `https://futsalplay.live/clubs/${slug}/overlay?token=${secret}`;
+            const bookmarkletUrl  = `https://futsalplay.live/clubs/${slug}/bookmarklet?token=${secret}`;
 
             await mailer.sendMail({
               from:    '"Futsalplay.live" <info@futsalplay.live>',
@@ -1060,6 +1063,9 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
                 ``,
                 `Overlay URL (add as a browser source in OBS or Streamlabs):`,
                 overlayUrl,
+                ``,
+                `FOGIS Bookmarklet (one-click roster import from minfotboll.se — install once):`,
+                bookmarkletUrl,
                 ``,
                 `Keep these links safe. Anyone with the link can access your controller.`,
                 ``,
@@ -1092,6 +1098,13 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
                     <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Overlay URL</p>
                     <p style="font-size:0.82rem;color:#5a6580;margin-bottom:8px;">Add this as a browser source in OBS or Streamlabs (1920x1080).</p>
                     <p style="font-size:0.75rem;color:#9aaabf;word-break:break-all;">${overlayUrl}</p>
+                  </div>
+
+                  <div style="background:#F4F6FA;border-radius:10px;padding:20px 24px;margin:24px 0;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">FOGIS Bookmarklet</p>
+                    <p style="font-size:0.82rem;color:#5a6580;margin-bottom:8px;">Install once — then click it on any minfotboll.se game page to load rosters instantly.</p>
+                    <a href="${bookmarkletUrl}" style="display:inline-block;background:#3D82F6;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Install Bookmarklet</a>
+                    <p style="font-size:0.75rem;color:#9aaabf;margin-top:10px;word-break:break-all;">${bookmarkletUrl}</p>
                   </div>
 
                   <p style="font-size:0.85rem;color:#5a6580;">Keep these links safe. Anyone with the link can access your controller.</p>
