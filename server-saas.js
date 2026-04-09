@@ -821,41 +821,6 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
               parsed = JSON.parse(body);
             }
 
-            if (parsed.gameId) {
-              // Server-side FOGIS fetch — no bookmarklet needed
-              const id  = String(parsed.gameId).replace(/\D/g, '');
-              if (!id || id.length < 5) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Invalid game ID' }));
-                return;
-              }
-              const api = 'https://minfotboll-api.azurewebsites.net/api';
-              function fogisGet(url) {
-                return new Promise((resolve, reject) => {
-                  https.get(url, { timeout: 8000 }, lr => {
-                    const ch = [];
-                    lr.on('data', d => ch.push(d));
-                    lr.on('end', () => {
-                      try { resolve(JSON.parse(Buffer.concat(ch).toString('utf8'))); }
-                      catch(e) { reject(new Error('FOGIS parse error: ' + e.message)); }
-                    });
-                  }).on('error', reject).on('timeout', () => reject(new Error('FOGIS request timed out')));
-                });
-              }
-              Promise.all([
-                fogisGet(`${api}/followgameapi/initpubliclivetimelineblurbs?GameID=${id}&SharedSecret=THIS_IS_MAGIC_VALUE`),
-                fogisGet(`${api}/magazinegameviewapi/initgamelineups?GameID=${id}`),
-              ]).then(([timeline, lineup]) => {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(processRosterData(timeline, lineup)));
-              }).catch(e => {
-                res.writeHead(502, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Could not fetch from FOGIS: ' + e.message }));
-              });
-              return;
-            }
-
-            // Direct payload (backward compat)
             const { timeline, lineup } = parsed;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(processRosterData(timeline, lineup)));

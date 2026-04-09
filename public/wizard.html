@@ -142,6 +142,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 }
 .fogis-success h3 { font-size:15px; font-weight:800; color:var(--green); margin-bottom:6px; }
 .fogis-success p  { font-size:13px; color:var(--dim); line-height:1.6; }
+.bookmarklet-strip { display:flex; align-items:center; gap:12px; background:rgba(61,130,246,.07); border:1px solid rgba(61,130,246,.2); border-radius:8px; padding:12px 14px; flex-wrap:wrap; }
+.bookmarklet-label { font-size:12px; font-weight:700; color:var(--blue-lt); }
+.bmk-drag-btn { display:inline-block; background:var(--blue); color:#fff; padding:7px 14px; border-radius:6px; font-size:13px; font-weight:700; text-decoration:none; cursor:grab; white-space:nowrap; }
+.bmk-drag-btn:active { cursor:grabbing; }
 
 /* ── Logo section ── */
 .logo-tabs { display:flex; gap:6px; margin-bottom:12px; }
@@ -369,20 +373,31 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
     </div>
 
     <div id="fogisUrlArea" class="hidden" style="margin-top:16px;">
-      <div class="field">
-        <label>FOGIS game page URL</label>
+
+      <!-- Bookmarklet install strip (one-time) -->
+      <div class="bookmarklet-strip">
+        <span class="bookmarklet-label">1. Drag to bookmarks bar <span style="color:var(--dim);font-weight:400;">(one-time)</span></span>
+        <a id="bmkDragLink" href="#" class="bmk-drag-btn" draggable="true">⚽ Load Roster</a>
+      </div>
+
+      <!-- URL input + open button -->
+      <div class="field" style="margin-top:14px;">
+        <label>2. Paste the game page URL</label>
         <input type="text" id="fogisUrl" placeholder="https://minfotboll.se/Tavling/Matcher/..." />
-        <p class="hint">Paste the full URL of the game page on minfotboll.se</p>
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button class="btn btn-primary" id="btnLoadFogis" onclick="loadFromFogis()">Load Roster</button>
+        <button class="btn btn-primary" onclick="fogisOpenTab()">Open game page</button>
         <button class="skip-link" onclick="fogisChoose('no')">← Change answer</button>
       </div>
 
+      <!-- Waiting state -->
       <div id="fogisWaiting" class="fogis-waiting hidden">
         <div class="spinner"></div>
-        <h3>Loading roster…</h3>
+        <h3>Waiting for roster…</h3>
+        <p>On the game page tab, click <strong style="color:#fff">⚽ Load Roster</strong> in your bookmarks bar.</p>
+        <br>
+        <button class="skip-link" onclick="fogisCancel()">Cancel</button>
       </div>
 
       <div id="fogisSuccess" class="fogis-success hidden">
@@ -728,6 +743,9 @@ async function init() {
   applyBranding();
   buildStepBar();
   startConnBar();
+  // Wire bookmarklet drag link
+  const bmkEl = document.getElementById('bmkDragLink');
+  if (bmkEl) bmkEl.href = buildBookmarkletHref();
   try {
     const st = await fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } }).then(r => r.json());
     prefillFromState(st);
@@ -996,52 +1014,69 @@ function fogisChoose(choice) {
   }
 }
 
+let fogisPoller      = null;
+let fogisSnapshot    = '';
+let fogisElapsedTimer = null;
+
 function extractFogisId(url) {
   const m = url.match(/(\d{6,})/);
   return m ? m[1] : null;
 }
 
-function loadFromFogis() {
-  const rawUrl = document.getElementById('fogisUrl').value.trim();
-  const gameId = extractFogisId(rawUrl);
-  const errEl  = document.getElementById('fogisErr');
+function buildBookmarkletHref() {
+  const endpoint = location.origin + _importRosterPath;
+  const tok = TOKEN;
+  return `javascript:(function(){var m=location.href.match(/(\\d{6,})/);if(!m){alert('No game ID found\\u2014open the game page on minfotboll.se first.');return;}var id=m[1],ep=${JSON.stringify(endpoint)},tok=${JSON.stringify(tok)},api='https://minfotboll-api.azurewebsites.net/api';var s=document.createElement('div');s.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:#050B18;color:#7DB8F7;border:2px solid #3D82F6;border-radius:8px;padding:14px 20px;font-family:sans-serif;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);min-width:220px;';s.textContent='\\u26bd Fetching roster\\u2026';document.body.appendChild(s);Promise.all([fetch(api+'/followgameapi/initpubliclivetimelineblurbs?GameID='+id+'&SharedSecret=THIS_IS_MAGIC_VALUE').then(function(r){return r.json();}),fetch(api+'/magazinegameviewapi/initgamelineups?GameID='+id).then(function(r){return r.json();})]).then(function(r){s.textContent='\\ud83d\\udce1 Sending to overlay\\u2026';return fetch(ep,{method:'POST',headers:{'Content-Type':'application/json','X-MFCLIVE-Token':tok},body:JSON.stringify({timeline:r[0],lineup:r[1]})});}).then(function(r){if(!r.ok)throw new Error('Server '+r.status);return r.json();}).then(function(d){s.style.borderColor='#22c55e';s.style.color='#22c55e';s.textContent='\\u2705 '+d.homeTeam+' vs '+d.awayTeam;setTimeout(function(){s.remove();},4000);}).catch(function(e){s.style.borderColor='#ef4444';s.style.color='#ef4444';s.textContent='\\u274c '+e.message;setTimeout(function(){s.remove();},6000);});})();`;
+}
 
-  if (!gameId) {
-    errEl.textContent = 'Could not find a game ID in that URL. Make sure you copied the full minfotboll.se game page URL.';
+function fogisOpenTab() {
+  const rawUrl = document.getElementById('fogisUrl').value.trim();
+  const errEl  = document.getElementById('fogisErr');
+  if (!extractFogisId(rawUrl)) {
+    errEl.textContent = 'Could not find a game ID in that URL.';
     errEl.classList.remove('hidden');
     return;
   }
   errEl.classList.add('hidden');
-
-  const btn = document.getElementById('btnLoadFogis');
-  btn.disabled = true;
-  btn.textContent = 'Loading…';
-  document.getElementById('fogisWaiting').classList.remove('hidden');
-  document.getElementById('fogisSuccess').classList.add('hidden');
-
-  fetch(_importRosterPath, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-MFCLIVE-Token': TOKEN },
-    body: JSON.stringify({ gameId }),
-  })
+  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
     .then(r => r.json())
-    .then(d => {
-      if (d.error) throw new Error(d.error);
-      document.getElementById('fogisWaiting').classList.add('hidden');
-      document.getElementById('fogisSuccess').classList.remove('hidden');
-      document.getElementById('fogisSuccessMsg').textContent =
-        `${d.homeTeam} vs ${d.awayTeam} · ${d.homePlayers} home + ${d.awayPlayers} away players · ${d.arena || ''}`;
-      fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
-        .then(r => r.json()).then(prefillFromState).catch(() => {});
-      setTimeout(() => goTo(1), 2000);
-    })
-    .catch(e => {
-      document.getElementById('fogisWaiting').classList.add('hidden');
-      errEl.textContent = '❌ ' + e.message;
-      errEl.classList.remove('hidden');
-      btn.disabled = false;
-      btn.textContent = 'Load Roster';
+    .then(st => { fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam }); })
+    .catch(() => { fogisSnapshot = ''; })
+    .finally(() => {
+      window.open(rawUrl, '_blank');
+      document.getElementById('fogisWaiting').classList.remove('hidden');
+      fogisPoller = setInterval(pollForRoster, 1500);
     });
+}
+
+function pollForRoster() {
+  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
+    .then(r => r.json())
+    .then(st => {
+      const sig = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam });
+      if (sig !== fogisSnapshot && (st.homePlayers || []).length > 0) {
+        fogisStopPolling();
+        const hp = (st.homePlayers || []).length;
+        const ap = (st.awayPlayers || []).length;
+        document.getElementById('fogisSuccess').classList.remove('hidden');
+        document.getElementById('fogisSuccessMsg').textContent =
+          `${st.homeTeam} vs ${st.awayTeam} · ${hp} home + ${ap} away players · ${st.arena || ''}`;
+        prefillFromState(st);
+        setTimeout(() => goTo(1), 2000);
+      }
+    })
+    .catch(() => {});
+}
+
+function fogisStopPolling() {
+  if (fogisPoller) { clearInterval(fogisPoller); fogisPoller = null; }
+  document.getElementById('fogisWaiting').classList.add('hidden');
+}
+
+function fogisCancel() {
+  fogisStopPolling();
+  document.getElementById('fogisSuccess').classList.add('hidden');
+  goTo(1);
 }
 
 function fogisUseExisting() {
