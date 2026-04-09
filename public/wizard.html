@@ -142,10 +142,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 }
 .fogis-success h3 { font-size:15px; font-weight:800; color:var(--green); margin-bottom:6px; }
 .fogis-success p  { font-size:13px; color:var(--dim); line-height:1.6; }
-.bookmarklet-strip { display:flex; align-items:center; gap:12px; background:rgba(61,130,246,.07); border:1px solid rgba(61,130,246,.2); border-radius:8px; padding:12px 14px; flex-wrap:wrap; }
+.bookmarklet-strip { background:rgba(61,130,246,.07); border:1px solid rgba(61,130,246,.2); border-radius:8px; padding:14px 16px; margin-top:4px; }
 .bookmarklet-label { font-size:12px; font-weight:700; color:var(--blue-lt); }
-.bmk-drag-btn { display:inline-block; background:var(--blue); color:#fff; padding:7px 14px; border-radius:6px; font-size:13px; font-weight:700; text-decoration:none; cursor:grab; white-space:nowrap; }
-.bmk-drag-btn:active { cursor:grabbing; }
+.bmk-copy-btn { background:var(--blue); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+.bmk-copy-btn:hover { background:#2d6fd4; }
 
 /* ── Logo section ── */
 .logo-tabs { display:flex; gap:6px; margin-bottom:12px; }
@@ -374,15 +374,22 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 
     <div id="fogisUrlArea" class="hidden" style="margin-top:16px;">
 
-      <!-- Bookmarklet install strip (one-time) -->
+      <!-- Bookmarklet install (one-time) -->
       <div class="bookmarklet-strip">
-        <span class="bookmarklet-label">1. Drag to bookmarks bar <span style="color:var(--dim);font-weight:400;">(one-time)</span></span>
-        <a id="bmkDragLink" href="#" class="bmk-drag-btn" draggable="true">⚽ Load Roster</a>
+        <div class="bookmarklet-label">Step 1 — Install the bookmarklet <span style="color:var(--dim);font-weight:400;">(once per browser)</span></div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <button class="bmk-copy-btn" id="bmkCopyBtn" onclick="copyBookmarklet()">Copy bookmarklet code</button>
+          <span id="bmkCopied" class="hidden" style="font-size:12px;color:var(--green);">✓ Copied!</span>
+        </div>
+        <p style="font-size:12px;color:var(--dim);margin-top:8px;line-height:1.6;">
+          Then: right-click your bookmarks bar → <strong style="color:#fff">Add page…</strong> → set Name to <strong style="color:#fff">⚽ Load Roster</strong> → paste the code into the URL field → Save.
+          <a id="bmkDragLink" href="#" draggable="true" style="color:var(--blue);text-decoration:underline;font-size:11px;display:block;margin-top:4px;">Or drag this link to your bookmarks bar</a>
+        </p>
       </div>
 
       <!-- URL input + open button -->
       <div class="field" style="margin-top:14px;">
-        <label>2. Paste the game page URL</label>
+        <label>Step 2 — Paste the game page URL and open it</label>
         <input type="text" id="fogisUrl" placeholder="https://minfotboll.se/Tavling/Matcher/..." />
       </div>
 
@@ -395,7 +402,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
       <div id="fogisWaiting" class="fogis-waiting hidden">
         <div class="spinner"></div>
         <h3>Waiting for roster…</h3>
-        <p>On the game page tab, click <strong style="color:#fff">⚽ Load Roster</strong> in your bookmarks bar.</p>
+        <p>Switch to the game page tab and click <strong style="color:#fff">⚽ Load Roster</strong> in your bookmarks bar.<br>This page will update automatically.</p>
         <br>
         <button class="skip-link" onclick="fogisCancel()">Cancel</button>
       </div>
@@ -1029,6 +1036,25 @@ function buildBookmarkletHref() {
   return `javascript:(function(){var m=location.href.match(/(\\d{6,})/);if(!m){alert('No game ID found\\u2014open the game page on minfotboll.se first.');return;}var id=m[1],ep=${JSON.stringify(endpoint)},tok=${JSON.stringify(tok)},api='https://minfotboll-api.azurewebsites.net/api';var s=document.createElement('div');s.style.cssText='position:fixed;top:20px;right:20px;z-index:99999;background:#050B18;color:#7DB8F7;border:2px solid #3D82F6;border-radius:8px;padding:14px 20px;font-family:sans-serif;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);min-width:220px;';s.textContent='\\u26bd Fetching roster\\u2026';document.body.appendChild(s);Promise.all([fetch(api+'/followgameapi/initpubliclivetimelineblurbs?GameID='+id+'&SharedSecret=THIS_IS_MAGIC_VALUE').then(function(r){return r.json();}),fetch(api+'/magazinegameviewapi/initgamelineups?GameID='+id).then(function(r){return r.json();})]).then(function(r){s.textContent='\\ud83d\\udce1 Sending to overlay\\u2026';return fetch(ep,{method:'POST',headers:{'Content-Type':'application/json','X-MFCLIVE-Token':tok},body:JSON.stringify({timeline:r[0],lineup:r[1]})});}).then(function(r){if(!r.ok)throw new Error('Server '+r.status);return r.json();}).then(function(d){s.style.borderColor='#22c55e';s.style.color='#22c55e';s.textContent='\\u2705 '+d.homeTeam+' vs '+d.awayTeam;setTimeout(function(){s.remove();},4000);}).catch(function(e){s.style.borderColor='#ef4444';s.style.color='#ef4444';s.textContent='\\u274c '+e.message;setTimeout(function(){s.remove();},6000);});})();`;
 }
 
+function copyBookmarklet() {
+  const code = buildBookmarkletHref();
+  const btn  = document.getElementById('bmkCopyBtn');
+  const done = document.getElementById('bmkCopied');
+  navigator.clipboard.writeText(code).then(() => {
+    done.classList.remove('hidden');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { done.classList.add('hidden'); btn.textContent = 'Copy bookmarklet code'; }, 3000);
+  }).catch(() => {
+    // Fallback for browsers that block clipboard without interaction
+    const ta = document.createElement('textarea');
+    ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    done.classList.remove('hidden');
+    setTimeout(() => done.classList.add('hidden'), 3000);
+  });
+}
+
 function fogisOpenTab() {
   const rawUrl = document.getElementById('fogisUrl').value.trim();
   const errEl  = document.getElementById('fogisErr');
@@ -1048,6 +1074,13 @@ function fogisOpenTab() {
       fogisPoller = setInterval(pollForRoster, 1500);
     });
 }
+
+// Poll immediately when the wizard tab regains focus — browsers throttle
+// setInterval in background tabs, so the user would otherwise have to wait
+// up to 60s after switching back before the roster is detected.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && fogisPoller) pollForRoster();
+});
 
 function pollForRoster() {
   fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
