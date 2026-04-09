@@ -849,11 +849,13 @@ function handleClubLogoFile(file) {
 }
 
 function prefillFromState(st) {
-  if (st.league)      { data.league      = st.league;      document.getElementById('league').value      = st.league; }
-  if (st.arena)       { data.arena       = st.arena;       document.getElementById('arena').value       = st.arena; }
-  if (st.kickoffTime) { data.kickoffTime = st.kickoffTime; document.getElementById('kickoffTime').value = st.kickoffTime; }
-  if (st.homeTeam) { data.homeTeam = st.homeTeam; document.getElementById('homeTeam').value = st.homeTeam; }
-  if (st.awayTeam) { data.awayTeam = st.awayTeam; document.getElementById('awayTeam').value = st.awayTeam; }
+  if (st.league)       { data.league       = st.league;       document.getElementById('league').value       = st.league; }
+  if (st.arena)        { data.arena        = st.arena;        document.getElementById('arena').value        = st.arena; }
+  if (st.kickoffTime)  { data.kickoffTime  = st.kickoffTime;  document.getElementById('kickoffTime').value  = st.kickoffTime; }
+  if (st.homeTeam)     { data.homeTeam     = st.homeTeam;     document.getElementById('homeTeam').value     = st.homeTeam; }
+  if (st.awayTeam)     { data.awayTeam     = st.awayTeam;     document.getElementById('awayTeam').value     = st.awayTeam; }
+  if (st.homeFullName) { data.homeFullName = st.homeFullName; document.getElementById('homeFullName').value = st.homeFullName; }
+  if (st.awayFullName) { data.awayFullName = st.awayFullName; document.getElementById('awayFullName').value = st.awayFullName; }
 
   if (st.homeLogo && !st.homeLogo.startsWith('__upload__')) {
     data.homeLogo = st.homeLogo;
@@ -1006,6 +1008,10 @@ async function action(act, payload) {
 }
 
 // ── Step 0: FOGIS ──────────────────────────────────────────────────────────────
+let fogisPoller      = null;
+let fogisSnapshot    = '';
+let fogisActive      = false; // true while wizard is waiting for FOGIS data
+
 function fogisChoose(choice) {
   document.getElementById('fogisAlreadyLoaded').classList.add('hidden');
   const urlArea  = document.getElementById('fogisUrlArea');
@@ -1015,15 +1021,22 @@ function fogisChoose(choice) {
   if (choice === 'yes') {
     urlArea.classList.remove('hidden');
     choiceEl.classList.remove('hidden');
+    // Take snapshot and start background polling immediately — so even if the
+    // user opens minfotboll.se themselves and clicks the bookmarklet without
+    // going through the "Open game page" button, we'll detect the change.
+    fogisActive = true;
+    fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
+      .then(r => r.json())
+      .then(st => { fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam }); })
+      .catch(() => { fogisSnapshot = ''; });
+    if (!fogisPoller) fogisPoller = setInterval(pollForRoster, 2000);
   } else {
+    fogisActive = false;
+    fogisStopPolling();
     urlArea.classList.add('hidden');
     goTo(1);
   }
 }
-
-let fogisPoller      = null;
-let fogisSnapshot    = '';
-let fogisElapsedTimer = null;
 
 function extractFogisId(url) {
   const m = url.match(/(\d{6,})/);
@@ -1064,22 +1077,19 @@ function fogisOpenTab() {
     return;
   }
   errEl.classList.add('hidden');
-  fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
-    .then(r => r.json())
-    .then(st => { fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam }); })
-    .catch(() => { fogisSnapshot = ''; })
-    .finally(() => {
-      window.open(rawUrl, '_blank');
-      document.getElementById('fogisWaiting').classList.remove('hidden');
-      fogisPoller = setInterval(pollForRoster, 1500);
-    });
+  window.open(rawUrl, '_blank');
+  document.getElementById('fogisWaiting').classList.remove('hidden');
+  // Speed up polling now that the game page is open
+  if (fogisPoller) { clearInterval(fogisPoller); fogisPoller = null; }
+  fogisPoller = setInterval(pollForRoster, 1500);
 }
 
-// Poll immediately when the wizard tab regains focus — browsers throttle
-// setInterval in background tabs, so the user would otherwise have to wait
-// up to 60s after switching back before the roster is detected.
+// Poll immediately when the wizard tab regains focus.
+// Browsers throttle setInterval in background tabs (up to 60s delay).
+// Using fogisActive flag rather than checking fogisPoller, so this also fires
+// when the user opened minfotboll.se themselves without using the button.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && fogisPoller) pollForRoster();
+  if (!document.hidden && fogisActive) pollForRoster();
 });
 
 function pollForRoster() {
@@ -1102,6 +1112,7 @@ function pollForRoster() {
 }
 
 function fogisStopPolling() {
+  fogisActive = false;
   if (fogisPoller) { clearInterval(fogisPoller); fogisPoller = null; }
   document.getElementById('fogisWaiting').classList.add('hidden');
 }

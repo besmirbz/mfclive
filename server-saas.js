@@ -752,8 +752,45 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
 
       function processRosterData(timeline, lineup) {
         const hdr   = timeline?.GameHeaderInfo || {};
-        const arena = (hdr.ArenaName || '').trim();
+
+        // Debug — log available fields on first import so unknown field names can be identified
+        console.log('[FOGIS] GameHeaderInfo keys:', Object.keys(hdr).join(', '));
+        console.log('[FOGIS] lineup keys:', Object.keys(lineup || {}).join(', '));
+
+        const arena  = (hdr.ArenaName || '').trim();
         const league = (hdr.CompetitionName || hdr.RoundName || '').trim();
+
+        // Kick-off time — try common field names, parse to HH:MM
+        const rawTime = hdr.StartTime || hdr.KickOffTime || hdr.MatchStart || hdr.MatchDateTime || '';
+        let kickoffTime = '';
+        if (rawTime) {
+          const d = new Date(rawTime);
+          if (!isNaN(d)) kickoffTime = d.toTimeString().slice(0, 5);
+        }
+
+        // Logo URLs — try common field names
+        const homeLogoUrl = (hdr.HomeTeamLogoUrl || hdr.HomeTeamImageUrl ||
+                             lineup?.HomeTeamGameTeamRoster?.LogoUrl ||
+                             lineup?.HomeTeamGameTeamRoster?.TeamLogoUrl || '').trim();
+        const awayLogoUrl = (hdr.AwayTeamLogoUrl || hdr.AwayTeamImageUrl ||
+                             lineup?.AwayTeamGameTeamRoster?.LogoUrl ||
+                             lineup?.AwayTeamGameTeamRoster?.TeamLogoUrl || '').trim();
+
+        // Full names
+        const homeFullName = (hdr.HomeTeamDisplayName || hdr.HomeTeamName || '').trim();
+        const awayFullName = (hdr.AwayTeamDisplayName || hdr.AwayTeamName || '').trim();
+
+        // Abbreviation — mirrors generateAbbr() in wizard.html
+        function makeAbbr(fullName) {
+          if (!fullName) return '';
+          const KEEP = new Set(['if','ik','bk','sk','fk','fc','ff','bf','hk','ifk','iff','fik']);
+          return fullName.trim().split(/\s+/)
+            .map(w => (KEEP.has(w.toLowerCase()) || (w === w.toUpperCase() && w.length <= 4))
+              ? w.toUpperCase() : w[0].toUpperCase())
+            .join('').slice(0, 6);
+        }
+        const homeTeam = makeAbbr(homeFullName) || 'HOME';
+        const awayTeam = makeAbbr(awayFullName) || 'AWAY';
 
         function rosterToPlayers(roster) {
           const players = [];
@@ -770,20 +807,20 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         const homePlayers = rosterToPlayers(lineup?.HomeTeamGameTeamRoster);
         const awayPlayers = rosterToPlayers(lineup?.AwayTeamGameTeamRoster);
 
-        const homeTeam = (hdr.HomeTeamDisplayName || '').trim().toUpperCase().slice(0, 6) ||
-                         (hdr.HomeTeamName || '').trim().toUpperCase().slice(0, 6);
-        const awayTeam = (hdr.AwayTeamDisplayName || '').trim().toUpperCase().slice(0, 6) ||
-                         (hdr.AwayTeamName || '').trim().toUpperCase().slice(0, 6);
-
         function playersToLineupText(players) {
           return players.map(p => `#${p.num} ${p.name}${p.cap ? ' (C)' : ''}`);
         }
 
         const s = room.state;
-        s.homeTeam  = homeTeam;
-        s.awayTeam  = awayTeam;
-        s.arena     = arena;
-        s.league    = league;
+        s.homeTeam     = homeTeam;
+        s.awayTeam     = awayTeam;
+        s.homeFullName = homeFullName;
+        s.awayFullName = awayFullName;
+        s.arena        = arena;
+        s.league       = league;
+        s.kickoffTime  = kickoffTime;
+        if (homeLogoUrl) s.homeLogo = homeLogoUrl;
+        if (awayLogoUrl) s.awayLogo = awayLogoUrl;
         s._homePlayers = homePlayers;
         s._awayPlayers = awayPlayers;
         const homeLines = playersToLineupText(homePlayers);
