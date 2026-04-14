@@ -514,9 +514,22 @@ body {
   <div class="credit">© 2025 Besmir Pepa</div>
 </div>
 
-<script src="/audio-util.js"></script>
 <script>
 'use strict';
+// Inline audio utility — smoothly ramps volume from current to toVol over durationMs
+function fadeAudio(audio, toVol, durationMs) {
+  toVol = Math.max(0, Math.min(1, toVol));
+  durationMs = Math.max(0, durationMs);
+  clearInterval(audio._fadeTimer);
+  const steps = Math.max(1, Math.round(durationMs / 16));
+  const fromVol = audio.volume;
+  let step = 0;
+  audio._fadeTimer = setInterval(() => {
+    step++;
+    audio.volume = Math.max(0, Math.min(1, fromVol + (toVol - fromVol) * (step / steps)));
+    if (step >= steps) { clearInterval(audio._fadeTimer); if (toVol === 0) audio.pause(); }
+  }, durationMs / steps);
+}
 
 // ── Token (forwarded from page URL to all API calls) ──────────────────────────
 const _tok = new URLSearchParams(location.search).get('token')
@@ -681,7 +694,7 @@ function updateLowerThird(d) {
     applyLTTheme(d.lowerThird.event);
     const team = d.lowerThird.team, logo = document.getElementById('ltTeamLogo'), tname = document.getElementById('ltTeamName');
     if (team === 'home' || team === 'away') {
-      if (logo.dataset.team !== team) { logo.dataset.team = team; logo.src = '/logo/' + team + _tokenParam('?'); }
+      if (logo.dataset.team !== team) { logo.dataset.team = team; logo.src = (team === 'home' ? _logoHomePath : _logoAwayPath) + _tokenParam('?'); }
       tname.textContent = team === 'home' ? (d.homeTeam || '') : (d.awayTeam || '');
     } else { logo.dataset.team = ''; logo.src = ''; tname.textContent = ''; }
     lt.classList.add('visible'); foot.classList.add('visible');
@@ -859,14 +872,18 @@ function connectSSE() {
     let d;
     try { d = JSON.parse(e.data); } catch { return; }
     if (d.type !== 'state') return;
-    updateScoreboard(d);
-    updateLowerThird(d);
-    updateLineup(d);
-    updateBrb(d);
-    updateStartingSoon(d);
+    applyAllUpdates(d);
   };
 }
 connectSSE();
+
+function applyAllUpdates(d) {
+  try { updateScoreboard(d);   } catch(e) { console.error('[overlay] updateScoreboard:', e); }
+  try { updateLowerThird(d);   } catch(e) { console.error('[overlay] updateLowerThird:', e); }
+  try { updateLineup(d);       } catch(e) { console.error('[overlay] updateLineup:', e); }
+  try { updateBrb(d);          } catch(e) { console.error('[overlay] updateBrb:', e); }
+  try { updateStartingSoon(d); } catch(e) { console.error('[overlay] updateStartingSoon:', e); }
+}
 
 // ── Polling fallback ──────────────────────────────────────────────────────────
 // Cloudflare tunnel (cloudflared) buffers SSE writes before forwarding them,
@@ -878,14 +895,7 @@ connectSSE();
   setInterval(() => {
     fetch(url)
       .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d || d.type !== 'state') return;
-        updateScoreboard(d);
-        updateLowerThird(d);
-        updateLineup(d);
-        updateBrb(d);
-        updateStartingSoon(d);
-      })
+      .then(d => { if (d && d.type === 'state') applyAllUpdates(d); })
       .catch(() => {});
   }, 2000);
 })();
