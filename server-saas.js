@@ -974,7 +974,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         `<script>window._MFCLIVE_TOKEN=${JSON.stringify(room.secret)};window._MFCLIVE_CONFIG=${clientCfg};</script>\n</head>`
       );
       const ct = file.endsWith('.js') ? 'application/javascript' : 'text/html';
-      res.writeHead(200, { 'Content-Type': ct });
+      res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'no-store' });
       res.end(html);
       return;
     }
