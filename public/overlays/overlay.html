@@ -750,7 +750,7 @@ function updateLineup(d) {
   if (d.homeLogo && hl.dataset.src !== d.homeLogo) { hl.dataset.src = d.homeLogo; hl.src = _logoSrc('home'); }
   if (d.awayLogo && al.dataset.src !== d.awayLogo) { al.dataset.src = d.awayLogo; al.src = _logoSrc('away'); }
   const ln = document.getElementById('ln');
-  const ovVisible = (d.overlayVisible || {}).lineup !== false;
+  const ovVisible = (d.overlayVisible || {}).lineup === true;
   if (ovVisible) { ln.classList.add('ready'); ln.classList.remove('ov-hidden'); }
   else           { ln.classList.add('ov-hidden'); }
   if (ovVisible && !_wasLineupVisible) { fanfareAudio.currentTime=0; fanfareAudio.volume=0; fanfareAudio.play().then(()=>fadeAudio(fanfareAudio,0.8,400)).catch(()=>{}); }
@@ -760,7 +760,7 @@ function updateLineup(d) {
 
 // ── BRB ───────────────────────────────────────────────────────────────────────
 function updateBrb(d) {
-  document.getElementById('brb').classList.toggle('ov-hidden', (d.overlayVisible || {}).brb === false);
+  document.getElementById('brb').classList.toggle('ov-hidden', (d.overlayVisible || {}).brb !== true);
 }
 
 // ── Starting Soon helpers ─────────────────────────────────────────────────────
@@ -829,7 +829,7 @@ function updateStartingSoon(d) {
   if (d.league) { leagueEl.textContent=d.league; leagueEl.classList.remove('hidden'); } else { leagueEl.classList.add('hidden'); }
   if (d.arena)  { arenaEl.textContent=d.arena;   arenaEl.classList.remove('hidden'); }  else { arenaEl.classList.add('hidden'); }
   sepEl.style.display = (d.league && d.arena) ? '' : 'none';
-  const nowVisible = (d.overlayVisible || {}).startingsoon !== false;
+  const nowVisible = (d.overlayVisible || {}).startingsoon === true;
   document.getElementById('ss').classList.toggle('ov-hidden', !nowVisible);
   if (!_ssInitialSync) {
     if (nowVisible && !_wasStartingSoon)  { bgAudio.currentTime=0; bgAudio.play().catch(()=>{}); fadeAudio(bgAudio,0.6,800); }
