@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MFCLIVE Controller</title>
 <style>
 :root {
@@ -65,6 +65,8 @@ header h1{font-size:14px;font-weight:800;letter-spacing:.1em;text-transform:uppe
 .rc-player-lbl{flex:1;font-size:13px;font-weight:700;color:#fff;text-transform:uppercase;}
 .rc-team-lbl{font-size:10px;color:rgba(255,255,255,.45);letter-spacing:.08em;text-transform:uppercase;}
 .rc-countdown{font-size:18px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums;min-width:40px;text-align:right;}
+@keyframes rcPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(1.12)}}
+.rc-countdown.rc-urgent{animation:rcPulse .7s ease-in-out infinite;color:var(--yellow);}
 .rc-clear{background:#1e2d45;border:none;color:var(--lblue);border-radius:5px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer;}
 .rc-clear:active{opacity:.7;}
 
@@ -118,6 +120,30 @@ textarea:focus{outline:none;border-color:var(--blue);}
 /* Toast */
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--blue);color:#fff;padding:9px 20px;border-radius:20px;font-size:12px;font-weight:700;transition:transform .3s;pointer-events:none;z-index:999;}
 .toast.show{transform:translateX(-50%) translateY(0);}
+
+/* Mobile breakpoint — small phones (< 380px) */
+@media (max-width:379px){
+  body{padding:6px;}
+  .timer-disp{font-size:clamp(36px,14vw,58px);}
+  .two-col{grid-template-columns:1fr 1fr;gap:5px;}
+  .big-num{font-size:30px;}
+  .btn{padding:14px 8px!important;font-size:11px!important;}
+  .btn-large{padding:16px 8px!important;font-size:15px!important;}
+  .btn-small{padding:7px 8px!important;font-size:10px!important;}
+  .col-btns{grid-template-columns:1fr 1fr;gap:3px;}
+  .conn{display:none;}
+  .card{padding:10px;}
+}
+
+/* Keyboard shortcuts modal */
+.kbd-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+.kbd-modal{background:#0d1829;border:1px solid rgba(61,130,246,.35);border-radius:12px;padding:22px;width:100%;max-width:360px;max-height:90vh;overflow-y:auto;}
+.kbd-modal-title{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);margin-bottom:14px;}
+.kbd-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(61,130,246,.1);}
+.kbd-row:last-child{border-bottom:none;}
+.kbd-key{font-size:12px;background:#1e2d45;border:1px solid rgba(61,130,246,.3);border-radius:4px;padding:3px 8px;font-family:monospace;color:var(--lblue);}
+.kbd-desc{font-size:12px;color:rgba(255,255,255,.5);}
+.kbd-close{display:block;width:100%;margin-top:16px;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;}
 
 /* YT preview */
 .yt-toggle-hdr{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
@@ -223,15 +249,15 @@ textarea:focus{outline:none;border-color:var(--blue);}
       </div>
       <div class="big-num" id="homeScore">0</div>
       <div class="col-btns">
-        <button class="btn btn-blue"  onclick="act('goal_home')">+ Goal</button>
-        <button class="btn btn-gray"  onclick="act('undo_home')">– Undo</button>
+        <button class="btn btn-blue"  onclick="if(_debounceAct('goal_home'))act('goal_home',{},this)">+ Goal</button>
+        <button class="btn btn-gray"  onclick="act('undo_home',{},this)">– Undo</button>
       </div>
       <div style="border-top:1px solid rgba(61,130,246,.08);margin:10px 0 8px;"></div>
       <div class="foul-dots" id="homeFoulDots"></div>
       <div class="foul-warn" id="homeFoulWarn"></div>
       <div class="col-btns" style="margin-top:5px">
-        <button class="btn btn-orange" style="font-size:11px" onclick="act('foul_home')">+ Foul</button>
-        <button class="btn btn-gray"   style="font-size:11px" onclick="act('undo_foul_home')">– Undo</button>
+        <button class="btn btn-orange" style="font-size:11px" onclick="if(_debounceAct('foul_home'))act('foul_home',{},this)">+ Foul</button>
+        <button class="btn btn-gray"   style="font-size:11px" onclick="act('undo_foul_home',{},this)">– Undo</button>
       </div>
     </div>
     <!-- AWAY -->
@@ -246,15 +272,15 @@ textarea:focus{outline:none;border-color:var(--blue);}
       </div>
       <div class="big-num" id="awayScore">0</div>
       <div class="col-btns">
-        <button class="btn btn-blue"  onclick="act('goal_away')">+ Goal</button>
-        <button class="btn btn-gray"  onclick="act('undo_away')">– Undo</button>
+        <button class="btn btn-blue"  onclick="if(_debounceAct('goal_away'))act('goal_away',{},this)">+ Goal</button>
+        <button class="btn btn-gray"  onclick="act('undo_away',{},this)">– Undo</button>
       </div>
       <div style="border-top:1px solid rgba(61,130,246,.08);margin:10px 0 8px;"></div>
       <div class="foul-dots" id="awayFoulDots"></div>
       <div class="foul-warn" id="awayFoulWarn"></div>
       <div class="col-btns" style="margin-top:5px">
-        <button class="btn btn-orange" style="font-size:11px" onclick="act('foul_away')">+ Foul</button>
-        <button class="btn btn-gray"   style="font-size:11px" onclick="act('undo_foul_away')">– Undo</button>
+        <button class="btn btn-orange" style="font-size:11px" onclick="if(_debounceAct('foul_away'))act('foul_away',{},this)">+ Foul</button>
+        <button class="btn btn-gray"   style="font-size:11px" onclick="act('undo_foul_away',{},this)">– Undo</button>
       </div>
     </div>
   </div>
@@ -374,6 +400,23 @@ textarea:focus{outline:none;border-color:var(--blue);}
 
 <div class="toast" id="toast"></div>
 
+<!-- Keyboard shortcuts modal -->
+<div id="kbdModal" style="display:none;" class="kbd-modal-backdrop" onclick="if(event.target===this)closeKbdModal()">
+  <div class="kbd-modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+    <div class="kbd-modal-title">⌨ Keyboard Shortcuts</div>
+    <div class="kbd-row"><span class="kbd-desc">Start / Stop timer</span><span class="kbd-key">Space</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Home goal</span><span class="kbd-key">1</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Away goal</span><span class="kbd-key">2</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Undo home goal</span><span class="kbd-key">Q</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Undo away goal</span><span class="kbd-key">W</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Home foul</span><span class="kbd-key">F</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Away foul</span><span class="kbd-key">G</span></div>
+    <div class="kbd-row"><span class="kbd-desc">Hide lower third</span><span class="kbd-key">H</span></div>
+    <div class="kbd-row"><span class="kbd-desc">This help</span><span class="kbd-key">?</span></div>
+    <button class="kbd-close" onclick="closeKbdModal()">Close</button>
+  </div>
+</div>
+
 <script>
 let gameState = {};
 let localMs = 20*60*1000;
@@ -392,6 +435,8 @@ function fmt(ms) {
 
 // Local ticks — game timer + red card countdowns
 let localRedCards = [];
+window.addEventListener('beforeunload', () => clearInterval(tickInterval));
+
 tickInterval = setInterval(() => {
   if (localRunning && localMs > 0) {
     localMs = Math.max(0, localMs - 100);
@@ -437,15 +482,25 @@ function renderRedCards(cards, homeName, awayName) {
     return;
   }
   section.style.display = '';
-  el.innerHTML = cards.map(rc => {
+  el.innerHTML = '';
+  cards.forEach(rc => {
     const tl = rc.team==='home' ? homeName : awayName;
-    return '<div class="rc-item">' +
-      '<div><div class="rc-player-lbl">🟥 ' + (rc.player||'—') + '</div>' +
-      '<div class="rc-team-lbl">' + tl + '</div></div>' +
-      '<div class="rc-countdown">' + fmt(rc.remainingMs) + '</div>' +
-      '<button class="rc-clear" onclick="act(\'red_card_remove\',{id:' + rc.id + '})">✕</button>' +
-      '</div>';
-  }).join('');
+    const wrap = document.createElement('div'); wrap.className = 'rc-item';
+    const info = document.createElement('div');
+    const plbl = document.createElement('div'); plbl.className = 'rc-player-lbl';
+    plbl.textContent = '🟥 ' + (rc.player || '—');
+    const tlbl = document.createElement('div'); tlbl.className = 'rc-team-lbl';
+    tlbl.textContent = tl;
+    info.appendChild(plbl); info.appendChild(tlbl);
+    const cd = document.createElement('div');
+    cd.className = 'rc-countdown' + (rc.remainingMs <= 30000 ? ' rc-urgent' : '');
+    cd.textContent = fmt(rc.remainingMs);
+    const btn = document.createElement('button'); btn.className = 'rc-clear';
+    btn.textContent = '✕';
+    btn.addEventListener('click', () => act('red_card_remove', { id: rc.id }));
+    wrap.appendChild(info); wrap.appendChild(cd); wrap.appendChild(btn);
+    el.appendChild(wrap);
+  });
 }
 
 // ── State application — called by both SSE and polling fallback ───────────────
@@ -546,7 +601,7 @@ function connectSSE() {
   const es = new EventSource(_eventsPath + '?token=' + (window._MFCLIVE_TOKEN || ''));
   function resetWatchdog() {
     clearTimeout(_sseWatchdog);
-    _sseWatchdog = setTimeout(() => { es.close(); connectSSE(); }, 10000);
+    _sseWatchdog = setTimeout(() => { es.close(); connectSSE(); }, Math.max(15000, _sseDelay + 5000));
   }
   es.onopen = () => {
     _sseDelay = 1000;
@@ -558,6 +613,7 @@ function connectSSE() {
     clearTimeout(_sseWatchdog);
     es.close();
     connEl.textContent = `reconnecting in ${Math.round(_sseDelay / 1000)}s…`;
+    startPolling(); // keep state fresh while SSE is down
     setTimeout(connectSSE, _sseDelay);
     _sseDelay = Math.min(_sseDelay * 2, 30000);
   };
@@ -685,7 +741,24 @@ function commitTeamName(side) {
 function timerStart() { if (localMs <= 0) return; localRunning = true;  updateTimerDisplay(); act('timer_start'); }
 function timerStop()  { localRunning = false; updateTimerDisplay(); act('timer_stop');  }
 
-async function act(action, payload={}) {
+// Debounce map — prevents accidental double-taps on action buttons
+const _actDebounce = new Map();
+function _debounceAct(key, ms = 600) {
+  if (_actDebounce.get(key) > Date.now()) return false;
+  _actDebounce.set(key, Date.now() + ms);
+  return true;
+}
+
+// Flash the button that triggered an action so the operator gets immediate feedback
+function _flashSender(btn) {
+  if (!btn || !(btn instanceof Element)) return;
+  const orig = btn.style.filter;
+  btn.style.filter = 'brightness(1.8)';
+  setTimeout(() => { btn.style.filter = orig; }, 180);
+}
+
+async function act(action, payload={}, _srcBtn) {
+  _flashSender(_srcBtn);
   try {
     const r = await fetch(_actionPath, {
       method:'POST',
@@ -944,8 +1017,14 @@ function toggleYT() {
 })();
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────────
+function openKbdModal()  { document.getElementById('kbdModal').style.display = 'flex'; }
+function closeKbdModal() { document.getElementById('kbdModal').style.display = 'none'; }
+
 document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+  if (e.key === 'Escape') { closeKbdModal(); return; }
+  if (e.key === '?') { openKbdModal(); return; }
+  if (document.getElementById('kbdModal').style.display !== 'none') return;
   if (e.code==='Space') { e.preventDefault(); localRunning ? timerStop() : timerStart(); }
   if (e.key==='1') act('goal_home');
   if (e.key==='2') act('goal_away');

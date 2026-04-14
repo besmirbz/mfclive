@@ -51,7 +51,7 @@
   <div class="section">
     <div class="section-title">Step 2 — Copy the bookmarklet</div>
     <div class="code-box" id="bmCode"></div>
-    <button class="copy-btn" id="copyBtn" onclick="copyCode()">Copy to Clipboard</button>
+    <button class="copy-btn" id="copyBtn">Copy to Clipboard</button>
   </div>
 
   <!-- Step 3: Add to browser -->
@@ -134,6 +134,7 @@ if (_cfg.importRosterPath) {
   urlInput.value = (location.protocol === 'file:' || !location.host) ? 'http://localhost:3000' : location.origin;
   urlInput.addEventListener('input', refresh);
 }
+document.getElementById('copyBtn').addEventListener('click', copyCode);
 refresh();
 
 function copyCode() {

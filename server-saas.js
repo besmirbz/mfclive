@@ -92,7 +92,7 @@ try {
   } else {
     ADMIN_SECRET = crypto.randomBytes(16).toString('hex');
     fs.writeFileSync(ADMIN_SECRET_FILE, ADMIN_SECRET, 'utf8');
-    console.log(`\n[admin] Generated admin secret. Store this safely:\n  ${ADMIN_SECRET}\n`);
+    console.log(`\n[admin] Generated admin secret — saved to ${ADMIN_SECRET_FILE}\n`);
   }
 } catch (e) {
   ADMIN_SECRET = crypto.randomBytes(16).toString('hex');
@@ -519,11 +519,12 @@ function handleAction(room, action, payload) {
 // ── Rate limiter ──────────────────────────────────────────────────────────────
 
 const _actionRate = new Map();
-function checkRateLimit(key) {
+// maxPerSecond: actions  — default 5 (realistic game pace); use 1 for heavy endpoints
+function checkRateLimit(key, maxPerSecond = 5) {
   const now = Date.now();
   let e = _actionRate.get(key);
   if (!e || now >= e.resetAt) { e = { count: 0, resetAt: now + 1000 }; _actionRate.set(key, e); }
-  return ++e.count <= 20;
+  return ++e.count <= maxPerSecond;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -585,9 +586,22 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
   const url   = new URL(req.url, `http://localhost:${PORT}`);
   const route = url.pathname;
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MFCLIVE-Token, X-MFCLIVE-Admin');
+  // Security headers on every response
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+  // CORS: only the import-roster endpoint needs cross-origin access (bookmarklet from minfotboll.se).
+  // All other endpoints are same-origin; restrict accordingly.
+  if (route.endsWith('/import-roster')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MFCLIVE-Token');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', 'https://futsalplay.live');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-MFCLIVE-Token, X-MFCLIVE-Admin');
+  }
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   // ── Admin routes ─────────────────────────────────────────────────────────────
@@ -687,7 +701,9 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       const ping = setInterval(() => {
         if (!res.writableEnded) { try { res.write(': keepalive\n\n'); } catch { clearInterval(ping); } }
       }, 25000);
-      req.on('close', () => { room.clients.delete(res); clearInterval(ping); });
+      const cleanupSSE = () => { room.clients.delete(res); clearInterval(ping); };
+      req.on('close', cleanupSSE);
+      req.on('error', cleanupSSE);
       return;
     }
 
@@ -726,7 +742,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         const fname = path.basename(logoUrl.slice(11));
         const fp = path.join(LOGOS_DIR, room.slug, fname);
         if (!fs.existsSync(fp)) { res.writeHead(404); res.end('Logo not found'); return; }
-        const mime = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.webp':'image/webp' }[path.extname(fname).toLowerCase()] || 'image/png';
+        const mime = { '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp' }[path.extname(fname).toLowerCase()] || 'image/png';
         res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' });
         fs.createReadStream(fp).pipe(res);
         return;
@@ -734,6 +750,10 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       if (!isSafeLogoUrl(logoUrl)) { res.writeHead(400); res.end('Invalid logo URL'); return; }
       const lr = https.get(logoUrl, { timeout: 5000 }, lr2 => {
         res.writeHead(200, { 'Content-Type': lr2.headers['content-type'] || 'image/png', 'Cache-Control': 'public, max-age=3600' });
+        // Body transfer timeout — destroy if no data for 10 s after headers
+        const bodyTimeout = setTimeout(() => { lr2.destroy(); if (!res.writableEnded) res.end(); }, 10000);
+        lr2.on('end', () => clearTimeout(bodyTimeout));
+        lr2.on('error', () => clearTimeout(bodyTimeout));
         lr2.pipe(res);
       });
       lr.on('timeout', () => { lr.destroy(); if (!res.headersSent) { res.writeHead(504); res.end(); } });
@@ -744,10 +764,11 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     // FOGIS roster import (called by bookmarklet from minfotboll.se)
     if (subpath === '/import-roster') {
       function importSuccessPage(r) {
+        const clubLabel = room.name ? `<p style="font-size:11px;color:rgba(125,184,247,.35);margin-bottom:10px;letter-spacing:.08em;text-transform:uppercase;">${esc(room.name)}</p>` : '';
         return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#050B18;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;}.box{text-align:center;padding:40px;max-width:480px;}.icon{font-size:52px;margin-bottom:18px;}h2{color:#7DB8F7;font-size:22px;margin-bottom:10px;}p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.6;}.closing{margin-top:20px;font-size:12px;color:rgba(125,184,247,.35);}</style>
 </head><body><div class="box"><div class="icon">✅</div>
-<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
+${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
 <p>${r.homePlayers} home players · ${r.awayPlayers} away players loaded<br>${esc(r.arena)}</p>
 <p class="closing">This tab will close in 3 seconds…</p>
 </div><script>setTimeout(()=>window.close(),3000);</script></body></html>`;
@@ -835,6 +856,8 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         return;
       }
       if (req.method === 'POST') {
+        const rosterRateKey = room.slug + ':roster:' + (req.headers['x-mfclive-token'] || req.socket.remoteAddress || 'anon');
+        if (!checkRateLimit(rosterRateKey, 2)) { res.writeHead(429); res.end('Too Many Requests'); return; }
         const chunks = [];
         req.on('data', d => { chunks.push(d); if (Buffer.concat(chunks).length > 512*1024) { res.writeHead(413); res.end(); req.socket.destroy(); } });
         req.on('end', () => {
@@ -861,6 +884,8 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
 
     // Logo upload — base64 JSON from wizard
     if (req.method === 'POST' && subpath === '/upload-logo') {
+      const uploadRateKey = room.slug + ':upload:' + (req.headers['x-mfclive-token'] || req.socket.remoteAddress || 'anon');
+      if (!checkRateLimit(uploadRateKey, 2)) { res.writeHead(429); res.end('Too Many Requests'); return; }
       if (!(req.headers['content-type'] || '').startsWith('application/json')) {
         res.writeHead(415); res.end('Unsupported Media Type'); return;
       }
@@ -871,7 +896,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
           const { side, filename, data } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
           if (!['home','away'].includes(side)) throw new Error('Invalid side');
           const ext = path.extname(String(filename || '')).toLowerCase();
-          if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
+          if (!['.png','.jpg','.jpeg','.gif','.webp'].includes(ext)) throw new Error('Invalid file type — SVG not allowed (use PNG or WebP)');
           const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
           const buf = Buffer.from(raw, 'base64');
           if (buf.length > 3*1024*1024) throw new Error('File too large (max 3 MB)');
@@ -1036,13 +1061,16 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     req.on('end', async () => {
       const rawBody = Buffer.concat(chunks);
       const sig     = req.headers['stripe-signature'];
-      const secret  = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error('[stripe webhook] STRIPE_WEBHOOK_SECRET not set — rejecting all webhook traffic');
+        res.writeHead(500); res.end('Webhook not configured');
+        return;
+      }
 
       let event;
       try {
-        event = secret
-          ? stripe.webhooks.constructEvent(rawBody, sig, secret)
-          : JSON.parse(rawBody.toString());
+        event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
       } catch (e) {
         console.error('[stripe webhook] signature verification failed:', e.message);
         res.writeHead(400); res.end('Webhook signature invalid');

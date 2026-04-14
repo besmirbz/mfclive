@@ -250,6 +250,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 .conn-info-note { font-size:11px; color:var(--dim); line-height:1.5; margin-bottom:8px; }
 .conn-actions { display:flex; gap:8px; flex-wrap:wrap; }
 
+/* ── Draft restore banner ── */
+.draft-banner{display:flex;align-items:center;gap:12px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.35);border-radius:8px;padding:10px 14px;margin-bottom:14px;width:100%;max-width:680px;font-size:12px;font-weight:700;color:#fef3c7;}
+.draft-banner button{background:none;border:1px solid rgba(254,243,199,.35);color:#fef3c7;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.draft-banner button:hover{background:rgba(254,243,199,.1);}
+
 /* ── Misc ── */
 .hidden { display:none !important; }
 .skip-link { font-size:12px; color:var(--dimmer); text-decoration:underline; cursor:pointer; background:none; border:none; font-family:inherit; }
@@ -258,6 +263,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
 </style>
 </head>
 <body>
+
+<!-- Draft restore banner — shown when a previous session had unsaved data -->
+<div id="draftBanner" class="draft-banner hidden" style="flex-wrap:wrap;">
+  <span style="flex:1;">⚠ Unsaved data from your last session has been restored.</span>
+  <button onclick="discardDraft()">Discard</button>
+</div>
 
 <div class="hdr">
   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
@@ -758,6 +769,7 @@ async function init() {
     prefillFromState(st);
     checkFogisAlreadyLoaded(st);
   } catch(e) { /* non-fatal */ }
+  restoreWizardDraft(); // restore any locally-saved draft (doesn't overwrite server state)
   goTo(0);
 }
 
@@ -961,7 +973,7 @@ async function validateAndSave(step) {
   if (step === 2) {
     data.homeTeam     = document.getElementById('homeTeam').value.trim().toUpperCase();
     data.homeFullName = document.getElementById('homeFullName').value.trim();
-    if (!data.homeTeam) { showStepErr(2, 'Enter a team abbreviation for the home team.'); return false; }
+    if (!data.homeTeam) { showStepErr(2, 'Enter a team abbreviation for the home team.', 'homeTeam'); return false; }
     const logo = await resolveLogoForSave('home');
     await action('set_game_info', { homeTeam: data.homeTeam, homeLogo: logo });
     return true;
@@ -970,7 +982,7 @@ async function validateAndSave(step) {
   if (step === 3) {
     data.awayTeam     = document.getElementById('awayTeam').value.trim().toUpperCase();
     data.awayFullName = document.getElementById('awayFullName').value.trim();
-    if (!data.awayTeam) { showStepErr(3, 'Enter a team abbreviation for the away team.'); return false; }
+    if (!data.awayTeam) { showStepErr(3, 'Enter a team abbreviation for the away team.', 'awayTeam'); return false; }
     const logo = await resolveLogoForSave('away');
     await action('set_game_info', { awayTeam: data.awayTeam, awayLogo: logo });
     return true;
@@ -995,10 +1007,95 @@ async function validateAndSave(step) {
   return true;
 }
 
-function showStepErr(step, msg) {
-  // Simple alert for now — could be inline
-  alert(msg);
+// ── Inline field validation ─────────────────────────────────────────────────────
+function showStepErr(step, msg, fieldId) {
+  // If a specific field ID is given, highlight it and show inline error
+  if (fieldId) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.style.borderColor = 'var(--red)';
+      field.addEventListener('input', () => { field.style.borderColor = ''; clearStepErr(step); }, { once: true });
+    }
+  }
+  // Show message in a step-level error banner (above the nav)
+  let errBanner = document.getElementById('stepErr' + step);
+  if (!errBanner) {
+    errBanner = document.createElement('div');
+    errBanner.id = 'stepErr' + step;
+    errBanner.className = 'msg msg-err';
+    errBanner.style.marginBottom = '10px';
+    const stepEl = document.getElementById('step' + step);
+    if (stepEl) stepEl.appendChild(errBanner);
+  }
+  errBanner.textContent = msg;
+  errBanner.style.display = '';
+  errBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+
+function clearStepErr(step) {
+  const errBanner = document.getElementById('stepErr' + step);
+  if (errBanner) errBanner.style.display = 'none';
+}
+
+// ── LocalStorage wizard auto-save ───────────────────────────────────────────────
+const LS_KEY = 'mfclive_wizard_draft';
+
+function saveWizardDraft() {
+  try {
+    const draft = {
+      step: currentStep,
+      league:       document.getElementById('league')?.value        || '',
+      arena:        document.getElementById('arena')?.value         || '',
+      kickoffTime:  document.getElementById('kickoffTime')?.value   || '',
+      homeFullName: document.getElementById('homeFullName')?.value  || '',
+      homeTeam:     document.getElementById('homeTeam')?.value      || '',
+      homeLogoUrl:  document.getElementById('homeLogoUrlInput')?.value || '',
+      awayFullName: document.getElementById('awayFullName')?.value  || '',
+      awayTeam:     document.getElementById('awayTeam')?.value      || '',
+      awayLogoUrl:  document.getElementById('awayLogoUrlInput')?.value || '',
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(draft));
+  } catch {}
+}
+
+function restoreWizardDraft() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (!draft || !draft.homeTeam) return; // nothing meaningful saved
+    // Apply to inputs
+    ['league','arena','kickoffTime'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && draft[id]) el.value = draft[id];
+    });
+    if (draft.homeFullName) document.getElementById('homeFullName').value = draft.homeFullName;
+    if (draft.homeTeam)     document.getElementById('homeTeam').value     = draft.homeTeam;
+    if (draft.awayFullName) document.getElementById('awayFullName').value = draft.awayFullName;
+    if (draft.awayTeam)     document.getElementById('awayTeam').value     = draft.awayTeam;
+    if (draft.homeLogoUrl) {
+      document.getElementById('homeLogoUrlInput').value = draft.homeLogoUrl;
+      setLogoTab('home','url', document.querySelector('#step2 .logo-tab:nth-child(2)'));
+      previewLogoUrl('home');
+    }
+    if (draft.awayLogoUrl) {
+      document.getElementById('awayLogoUrlInput').value = draft.awayLogoUrl;
+      setLogoTab('away','url', document.querySelector('#step3 .logo-tab:nth-child(2)'));
+      previewLogoUrl('away');
+    }
+    // Show restore notice
+    const banner = document.getElementById('draftBanner');
+    if (banner) banner.classList.remove('hidden');
+  } catch {}
+}
+
+function discardDraft() {
+  localStorage.removeItem(LS_KEY);
+  const banner = document.getElementById('draftBanner');
+  if (banner) banner.classList.add('hidden');
+}
+
+window.addEventListener('beforeunload', saveWizardDraft);
 
 // ── API helpers ────────────────────────────────────────────────────────────────
 async function action(act, payload) {
