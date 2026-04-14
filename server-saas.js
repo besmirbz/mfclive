@@ -753,32 +753,19 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       function processRosterData(timeline, lineup) {
         const hdr   = timeline?.GameHeaderInfo || {};
 
-        // Debug — log available fields on first import so unknown field names can be identified
-        console.log('[FOGIS] GameHeaderInfo keys:', Object.keys(hdr).join(', '));
-        console.log('[FOGIS] lineup keys:', Object.keys(lineup || {}).join(', '));
+const arena  = (hdr.ArenaName || '').trim();
+        const league = (hdr.LeagueDisplayName || hdr.LeagueName || hdr.FederationOrCupName || '').trim();
 
-        const arena  = (hdr.ArenaName || '').trim();
-        const league = (hdr.CompetitionName || hdr.RoundName || '').trim();
+        // Kick-off time — GameTime is "HH:MM:SS" or "HH:MM"
+        const kickoffTime = (hdr.GameTime || '').trim().slice(0, 5); // take HH:MM
 
-        // Kick-off time — try common field names, parse to HH:MM
-        const rawTime = hdr.StartTime || hdr.KickOffTime || hdr.MatchStart || hdr.MatchDateTime || '';
-        let kickoffTime = '';
-        if (rawTime) {
-          const d = new Date(rawTime);
-          if (!isNaN(d)) kickoffTime = d.toTimeString().slice(0, 5);
-        }
-
-        // Logo URLs — try common field names
-        const homeLogoUrl = (hdr.HomeTeamLogoUrl || hdr.HomeTeamImageUrl ||
-                             lineup?.HomeTeamGameTeamRoster?.LogoUrl ||
-                             lineup?.HomeTeamGameTeamRoster?.TeamLogoUrl || '').trim();
-        const awayLogoUrl = (hdr.AwayTeamLogoUrl || hdr.AwayTeamImageUrl ||
-                             lineup?.AwayTeamGameTeamRoster?.LogoUrl ||
-                             lineup?.AwayTeamGameTeamRoster?.TeamLogoUrl || '').trim();
+        // Logo URLs
+        const homeLogoUrl = (hdr.HomeTeamClubLogoURL || lineup?.HomeTeamLogoURL || '').trim();
+        const awayLogoUrl = (hdr.AwayTeamClubLogoURL || lineup?.AwayTeamLogoURL || '').trim();
 
         // Full names
-        const homeFullName = (hdr.HomeTeamDisplayName || hdr.HomeTeamName || '').trim();
-        const awayFullName = (hdr.AwayTeamDisplayName || hdr.AwayTeamName || '').trim();
+        const homeFullName = (hdr.HomeTeamDisplayName || hdr.HomeTeamClubName || hdr.HomeTeamTeamName || '').trim();
+        const awayFullName = (hdr.AwayTeamDisplayName || hdr.AwayTeamClubName || hdr.AwayTeamTeamName || '').trim();
 
         // Abbreviation — mirrors generateAbbr() in wizard.html
         function makeAbbr(fullName) {
