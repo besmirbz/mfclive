@@ -522,7 +522,9 @@ body {
 const _tok = new URLSearchParams(location.search).get('token')
            || (typeof window._MFCLIVE_TOKEN !== 'undefined' ? window._MFCLIVE_TOKEN : null);
 function _tokenParam(sep) { return _tok ? sep + 'token=' + _tok : ''; }
-function _logoSrc(side)   { return '/logo/' + side + '?' + Date.now() + _tokenParam('&'); }
+const _logoHomePath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.logoHomePath) || '/logo/home';
+const _logoAwayPath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.logoAwayPath) || '/logo/away';
+function _logoSrc(side)   { return (side === 'home' ? _logoHomePath : _logoAwayPath) + '?' + Date.now() + _tokenParam('&'); }
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 const goalAudio    = new Audio('/audio/goal.mp3');

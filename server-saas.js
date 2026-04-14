@@ -751,9 +751,8 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       }
 
       function processRosterData(timeline, lineup) {
-        const hdr   = timeline?.GameHeaderInfo || {};
-
-const arena  = (hdr.ArenaName || '').trim();
+        const hdr    = timeline?.GameHeaderInfo || {};
+        const arena  = (hdr.ArenaName || '').trim();
         const league = (hdr.LeagueDisplayName || hdr.LeagueName || hdr.FederationOrCupName || '').trim();
 
         // Kick-off time — GameTime is "HH:MM:SS" or "HH:MM"

@@ -214,7 +214,7 @@ textarea:focus{outline:none;border-color:var(--blue);}
     <!-- HOME -->
     <div>
       <div class="team-hdr">
-        <img id="homeLogoImg" src="/logo/home" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+        <img id="homeLogoImg" src="" style="width:32px;height:32px;object-fit:contain;display:none;" onerror="this.style.display='none'" />
         <span id="homeLbl" class="team-name-lbl" ondblclick="editTeamName('home')" title="Double-tap to edit name">MFC</span>
         <span class="pencil" onclick="editTeamName('home')">✎</span>
         <input id="homeNameInput" class="team-name-input" maxlength="6" style="display:none"
@@ -237,7 +237,7 @@ textarea:focus{outline:none;border-color:var(--blue);}
     <!-- AWAY -->
     <div>
       <div class="team-hdr">
-        <img id="awayLogoImg" src="/logo/away" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'" />
+        <img id="awayLogoImg" src="" style="width:32px;height:32px;object-fit:contain;display:none;" onerror="this.style.display='none'" />
         <span id="awayLbl" class="team-name-lbl" ondblclick="editTeamName('away')" title="Double-tap to edit name">ÖIF</span>
         <span class="pencil" onclick="editTeamName('away')">✎</span>
         <input id="awayNameInput" class="team-name-input" maxlength="6" style="display:none"
@@ -516,16 +516,18 @@ function applyState(d) {
     if (ytInput.value !== d.ytUrl) { ytInput.value = d.ytUrl; updateYT(true); }
   }
   const hl=document.getElementById('homeLogoImg'); const al=document.getElementById('awayLogoImg');
-  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src='/logo/home?t='+Date.now();}
-  if(d.awayLogo&&al&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src='/logo/away?t='+Date.now();}
+  if(d.homeLogo&&hl&&hl.dataset.src!==d.homeLogo){hl.dataset.src=d.homeLogo;hl.src=_logoHomePath+'?t='+Date.now();hl.style.display='';}
+  if(d.awayLogo&&al&&al.dataset.src!==d.awayLogo){al.dataset.src=d.awayLogo;al.src=_logoAwayPath+'?t='+Date.now();al.style.display='';}
 }
 
 // ── Polling fallback — used when SSE data is buffered (e.g. Cloudflare tunnel) ─
 // Starts on connect; cancelled the moment a real SSE message arrives.
 let _pollTimer = null;
-const _eventsPath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.eventsPath) || '/events';
-const _statePath  = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.statePath)  || '/api/state';
-const _actionPath = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.actionPath) || '/action';
+const _eventsPath    = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.eventsPath)    || '/events';
+const _statePath     = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.statePath)     || '/api/state';
+const _actionPath    = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.actionPath)    || '/action';
+const _logoHomePath  = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.logoHomePath)  || '/logo/home';
+const _logoAwayPath  = (window._MFCLIVE_CONFIG && window._MFCLIVE_CONFIG.logoAwayPath)  || '/logo/away';
 
 function startPolling() {
   if (_pollTimer) return;
