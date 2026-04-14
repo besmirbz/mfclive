@@ -138,8 +138,8 @@ refresh();
 
 function copyCode() {
   const url = urlInput.value.trim();
-  if (!isValidServerUrl(url)) { alert('Enter a valid http(s):// server URL first.'); return; }
-  const code = buildBookmarklet(url);
+  if (!_cfg.importRosterPath && !isValidServerUrl(url)) { alert('Enter a valid http(s):// server URL first.'); return; }
+  const code = buildBookmarklet(getEndpoint(), TOKEN);
   const btn = document.getElementById('copyBtn');
   function onSuccess() {
     btn.textContent = '✓ Copied!';

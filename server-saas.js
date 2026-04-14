@@ -214,6 +214,7 @@ function saveRoomState(room) {
   const s = room.state;
   const snapshot = {
     homeTeam: s.homeTeam, awayTeam: s.awayTeam,
+    homeFullName: s.homeFullName || '', awayFullName: s.awayFullName || '',
     homeLogo: s.homeLogo, awayLogo: s.awayLogo,
     homeScore: s.homeScore, awayScore: s.awayScore,
     period: s.period, halfTime: s.halfTime,
@@ -241,6 +242,7 @@ function restoreRoomState(room) {
     const dur  = periodMs(room.config);
     Object.assign(room.state, {
       homeTeam: snap.homeTeam || '', awayTeam: snap.awayTeam || '',
+      homeFullName: snap.homeFullName || '', awayFullName: snap.awayFullName || '',
       homeLogo: snap.homeLogo || '', awayLogo: snap.awayLogo || '',
       homeScore: snap.homeScore ?? 0, awayScore: snap.awayScore ?? 0,
       period: snap.period ?? 1, halfTime: snap.halfTime ?? false,
@@ -294,6 +296,7 @@ function getPublicState(room) {
   return {
     type: 'state',
     homeTeam: s.homeTeam, awayTeam: s.awayTeam,
+    homeFullName: s.homeFullName || '', awayFullName: s.awayFullName || '',
     homeLogo: s.homeLogo, awayLogo: s.awayLogo,
     homeScore: s.homeScore, awayScore: s.awayScore,
     period: s.period, halfTime: s.halfTime,
