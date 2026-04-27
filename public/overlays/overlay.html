@@ -633,39 +633,7 @@ function applyLTTheme(event) {
   document.getElementById('ltFoot').style.background  = `linear-gradient(to right, ${t.color}, transparent)`;
   document.getElementById('ltRcIcon').className = 'lt-rcicon' + (event === 'redcard' ? ' show' : '');
 }
-function screenFlash(color, duration) {
-  const fl = document.createElement('div');
-  fl.style.cssText = `position:fixed;inset:0;background:${color};pointer-events:none;z-index:9990;`;
-  document.body.appendChild(fl);
-  fl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: duration || 350, easing: 'ease-out', fill: 'forwards' })
-    .onfinish = () => fl.remove();
-}
-function burstParticles(colors, count, spreadMult) {
-  const rect = document.getElementById('lt').getBoundingClientRect();
-  const ox = rect.left + rect.width * 0.3, oy = rect.top + rect.height * 0.5;
-  const spread = spreadMult || 1, n = count || 24;
-  for (let i = 0; i < n; i++) {
-    const p = document.createElement('div');
-    const r = Math.random();
-    let w, h, br;
-    if (r < 0.45)       { w = h = 5 + Math.random() * 10; br = '50%'; }
-    else if (r < 0.75)  { w = h = 4 + Math.random() * 8;  br = '2px'; }
-    else                { w = 3 + Math.random() * 4; h = 10 + Math.random() * 12; br = '1px'; }
-    p.style.cssText = `position:fixed;left:${ox}px;top:${oy}px;width:${w}px;height:${h}px;border-radius:${br};background:${colors[Math.floor(Math.random() * colors.length)]};pointer-events:none;z-index:9991;`;
-    document.body.appendChild(p);
-    const angle = Math.random() * Math.PI * 2, dist = (100 + Math.random() * 220) * spread;
-    const tx = Math.cos(angle) * dist, ty = Math.sin(angle) * dist - 70, rot = Math.random() * 720 - 360, dur = 550 + Math.random() * 550;
-    p.animate([
-      { transform: `translate(-50%,-50%) scale(1) rotate(0deg)`, opacity: 1 },
-      { transform: `translate(calc(-50% + ${tx}px),calc(-50% + ${ty}px)) scale(0) rotate(${rot}deg)`, opacity: 0 }
-    ], { duration: dur, easing: 'ease-out', fill: 'forwards' }).onfinish = () => p.remove();
-    setTimeout(() => p.remove(), dur + 200);
-  }
-}
 function triggerGoalFx() {
-  const COLORS = ['#FFD700','#fff','#f59e0b','#FFEC00','#ffe066','#fff','#FFD700'];
-  burstParticles(COLORS, 42, 1);
-  setTimeout(() => burstParticles(COLORS, 24, 1.3), 160);
   const shine = document.getElementById('ltShine');
   shine.classList.remove('active'); void shine.offsetWidth; shine.classList.add('active');
   const ltEl = document.getElementById('lt');
@@ -673,8 +641,6 @@ function triggerGoalFx() {
   setTimeout(() => ltEl.classList.remove('pulse-goal'), 1500);
 }
 function triggerRedCardFx() {
-  screenFlash('rgba(239,68,68,0.25)', 300);
-  setTimeout(() => screenFlash('rgba(239,68,68,0.15)', 280), 380);
   const ltEl = document.getElementById('lt');
   ltEl.classList.remove('pulse-red'); void ltEl.offsetWidth; ltEl.classList.add('pulse-red');
   setTimeout(() => ltEl.classList.remove('pulse-red'), 1100);
@@ -702,8 +668,6 @@ function updateLowerThird(d) {
     if (ltKey !== _prevLTKey && !_ltInitialSync) {
       _prevLTKey = ltKey;
       const ev = d.lowerThird.event;
-      if (ev === 'goal') { screenFlash('rgba(255,215,0,0.40)',280); setTimeout(()=>screenFlash('rgba(255,215,0,0.25)',250),210); setTimeout(()=>screenFlash('rgba(255,215,0,0.15)',220),400); }
-      if (ev === 'redcard') screenFlash('rgba(239,68,68,0.3)', 250);
       setTimeout(() => { if (ev==='goal') triggerGoalFx(); if (ev==='redcard') triggerRedCardFx(); }, 580);
       setTimeout(() => {
         if (ev === 'goal') { goalAudio.currentTime=0; goalAudio.volume=0; goalAudio.play().catch(()=>{}); fadeAudio(goalAudio,0.85,250); }

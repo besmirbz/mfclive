@@ -101,6 +101,8 @@ textarea:focus{outline:none;border-color:var(--blue);}
 .ov-row:last-child{margin-bottom:0;}
 .ov-row:active{opacity:.72;transform:scale(.97);}
 .ov-row.ov-live{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.28);}
+.ov-eye{font-size:13px;margin-right:8px;flex-shrink:0;opacity:.35;transition:opacity .2s;}
+.ov-row.ov-live .ov-eye{opacity:.85;}
 .ov-icon{font-size:15px;margin-right:10px;flex-shrink:0;}
 .ov-name{flex:1;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#fff;}
 .ov-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.07);flex-shrink:0;}
@@ -933,7 +935,8 @@ function renderOverlays(visible) {
   const container = document.getElementById('ovRows');
   container.innerHTML = OVERLAYS.map(ov => {
     const live = visible[ov.name] !== false;
-    return `<div class="ov-row${live?' ov-live':''}" onclick="toggleOverlay('${ov.name}')">
+    return `<div class="ov-row${live?' ov-live':''}" onclick="toggleOverlay('${ov.name}')" title="${live ? 'Visible on overlay \u2014 click to hide' : 'Hidden on overlay \u2014 click to show'}">
+      <span class="ov-eye">👁</span>
       <span class="ov-icon">${ov.icon}</span>
       <span class="ov-name">${ov.label}</span>
       <div class="ov-pill">
