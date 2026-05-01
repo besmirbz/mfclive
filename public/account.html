@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Club Account - Futsalplay.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --navy: #050B18; --blue: #3D82F6; --blue-dark: #2563EB; --white: #ffffff; --grey: #F4F6FA; --text: #1a2340; --muted: #5a6580; }
+    body { font-family: 'Montserrat', sans-serif; background: var(--grey); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    nav {
+      background: var(--white); border-bottom: 1px solid #e8ecf4;
+      padding: 0 5%; height: 72px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .nav-logo img { height: 42px; width: auto; }
+    .nav-wordmark { font-family: 'League Spartan', sans-serif; font-weight: 800; font-size: 1.25rem; color: var(--navy); letter-spacing: -0.01em; line-height: 1; }
+    .nav-wordmark .live { color: var(--blue); }
+    .nav-club { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+
+    main { flex: 1; padding: 48px 5%; max-width: 680px; margin: 0 auto; width: 100%; }
+
+    .page-title {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 2rem; font-weight: 800; margin-bottom: 6px;
+    }
+    .page-sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 36px; }
+
+    .section-label {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 12px;
+    }
+
+    .link-card {
+      background: var(--white); border-radius: 14px;
+      padding: 20px 24px; margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .link-card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .link-card-title { font-weight: 700; font-size: 0.95rem; }
+    .link-card-desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+    .link-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--grey); border-radius: 8px; padding: 10px 14px;
+    }
+    .link-text {
+      flex: 1; font-size: 0.78rem; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-family: monospace;
+    }
+    .copy-btn {
+      flex-shrink: 0;
+      background: var(--blue); color: var(--white);
+      border: none; border-radius: 6px;
+      padding: 6px 14px; font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; font-family: 'Montserrat', sans-serif;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: var(--blue-dark); }
+    .copy-btn.copied { background: #16a34a; }
+
+    .open-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--navy); color: var(--white);
+      border-radius: 8px; padding: 9px 18px;
+      text-decoration: none; font-size: 0.85rem; font-weight: 600;
+      margin-top: 14px; transition: opacity 0.15s;
+    }
+    .open-btn:hover { opacity: 0.85; }
+    .open-btn svg { flex-shrink: 0; }
+
+    .overlay-note {
+      font-size: 0.78rem; color: var(--muted); margin-top: 10px;
+    }
+
+    .divider { border: none; border-top: 1px solid #e4eaf5; margin: 32px 0; }
+
+    .help-box {
+      background: var(--white); border-radius: 14px; padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 16px;
+      font-size: 0.88rem; color: var(--muted); line-height: 1.6;
+    }
+    .help-box a { color: var(--blue); text-decoration: none; font-weight: 600; }
+    .help-box a:hover { text-decoration: underline; }
+
+    footer { text-align: center; padding: 24px; font-size: 0.8rem; color: #9aaabf; }
+    footer a { color: #7a8fa8; text-decoration: none; }
+
+    @media (max-width: 500px) {
+      main { padding: 32px 16px; }
+      .link-card { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/"><img src="/img/logo.svg" alt="Futsalplay.live"><span class="nav-wordmark">FutsalPlay<span class="live">.live</span></span></a>
+    <span class="nav-club" id="navClub"></span>
+  </nav>
+
+  <main>
+    <h1 class="page-title" id="pageTitle">Club Account</h1>
+    <p class="page-sub">Your permanent links. Bookmark this page &mdash; they never expire.</p>
+
+    <p class="section-label">Get started</p>
+
+    <div class="link-card">
+      <div class="link-card-head">
+        <span class="link-card-title">Setup Wizard</span>
+      </div>
+      <p class="link-card-desc">Run before each game to enter teams, lineups and match info.</p>
+      <div class="link-row">
+        <span class="link-text" id="wizardUrl"></span>
+        <button class="copy-btn" onclick="copyLink('wizardUrl', this)">Copy</button>
+      </div>
+      <a class="open-btn" id="wizardLink" href="#" target="_blank">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Open Setup Wizard
+      </a>
+    </div>
+
+    <div class="link-card">
+      <div class="link-card-head">
+        <span class="link-card-title">Controller</span>
+      </div>
+      <p class="link-card-desc">Open on any phone or tablet on match day to manage the live game.</p>
+      <div class="link-row">
+        <span class="link-text" id="controllerUrl"></span>
+        <button class="copy-btn" onclick="copyLink('controllerUrl', this)">Copy</button>
+      </div>
+      <a class="open-btn" id="controllerLink" href="#" target="_blank">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Open Controller
+      </a>
+    </div>
+
+    <hr class="divider">
+    <p class="section-label">OBS / Streamlabs</p>
+
+    <div class="link-card">
+      <div class="link-card-head">
+        <span class="link-card-title">Overlay URL</span>
+      </div>
+      <p class="link-card-desc">Add as a Browser Source in OBS or Streamlabs at 1920&times;1080.</p>
+      <div class="link-row">
+        <span class="link-text" id="overlayUrl"></span>
+        <button class="copy-btn" onclick="copyLink('overlayUrl', this)">Copy</button>
+      </div>
+      <p class="overlay-note">Need help? See the <a href="/guide" style="color:var(--blue);font-weight:600;">getting started guide</a>.</p>
+    </div>
+
+    <hr class="divider">
+
+    <div class="help-box">
+      Questions? Write to us at <a href="mailto:info@futsalplay.live">info@futsalplay.live</a> and we will help you get set up.
+    </div>
+  </main>
+
+  <footer>
+    <a href="/">futsalplay.live</a> &nbsp;|&nbsp; <a href="mailto:info@futsalplay.live">info@futsalplay.live</a>
+  </footer>
+
+  <script>
+    const cfg = window._MFCLIVE_CONFIG || {};
+
+    function abs(path) {
+      return path ? (window.location.origin + path) : '';
+    }
+
+    function fill(id, path) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = abs(path);
+    }
+
+    function setLink(linkId, path) {
+      const el = document.getElementById(linkId);
+      if (el) el.href = abs(path);
+    }
+
+    if (cfg.club) {
+      document.getElementById('pageTitle').textContent = cfg.club;
+      document.getElementById('navClub').textContent   = cfg.club;
+      document.title = cfg.club + ' - Futsalplay.live';
+    }
+
+    fill('wizardUrl',     cfg.wizardPath);
+    fill('controllerUrl', cfg.controllerPath);
+    fill('overlayUrl',    cfg.overlayPath);
+    setLink('wizardLink',     cfg.wizardPath);
+    setLink('controllerLink', cfg.controllerPath);
+
+    function copyLink(spanId, btn) {
+      const text = document.getElementById(spanId).textContent.trim();
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

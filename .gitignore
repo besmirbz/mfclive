@@ -4,3 +4,6 @@ node_modules/
 .claude_codereview*.md
 WIZARD_PLAN.md
 SESSION_SUMMARY.md
+.env
+ecosystem.config.js
+ecosystem.config.js_test
