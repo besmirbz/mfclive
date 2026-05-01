@@ -380,6 +380,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
           <span class="choice-label">No — manual setup</span>
           <span class="choice-sub">Enter everything yourself</span>
         </button>
+        <button class="choice-btn" id="btnFogisPhoto" onclick="fogisChoose('photo')" style="grid-column:span 2;padding:14px 16px;display:flex;align-items:center;gap:14px;text-align:left;">
+          <span class="choice-icon" style="font-size:22px;margin:0;flex-shrink:0;">📷</span>
+          <span><span class="choice-label" style="font-size:12px;">Import from photo</span><span class="choice-sub" style="display:block;">Upload a photo of the lineup sheet — we'll read it automatically</span></span>
+        </button>
       </div>
     </div>
 
@@ -424,6 +428,49 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; appeara
       </div>
 
       <div id="fogisErr" class="msg msg-err hidden"></div>
+    </div>
+
+    <!-- ── OCR photo import area ── -->
+    <div id="ocrArea" class="hidden" style="margin-top:16px;">
+      <div id="ocrUploadPanel">
+        <div class="file-drop" id="ocrFileDrop" onclick="document.getElementById('ocrFileInput').click()"
+             ondragover="fileDragOver(event,'ocrFileDrop')" ondragleave="fileDragLeave('ocrFileDrop')"
+             ondrop="ocrHandleDrop(event)">
+          <input type="file" id="ocrFileInput" accept="image/*" style="display:none;" onchange="ocrFileSelected(this)">
+          <div class="file-drop-text">
+            <strong>Click to choose</strong> or drag &amp; drop<br>
+            <span style="font-size:10px;">Photo or screenshot of the lineup sheet — JPG, PNG, WebP — max 15 MB</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;text-align:center;">
+          <label style="cursor:pointer;display:inline-block;background:rgba(61,130,246,.08);border:1px solid var(--border);border-radius:8px;padding:8px 18px;font-size:12px;color:var(--blue);font-weight:600;">
+            📱 Use camera
+            <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="ocrFileSelected(this)">
+          </label>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="skip-link" onclick="fogisChoose('no')">← Change answer</button>
+        </div>
+      </div>
+
+      <div id="ocrProcessing" class="fogis-waiting hidden">
+        <div class="spinner"></div>
+        <h3>Reading lineup sheet…</h3>
+        <p>Extracting teams and players from the photo.</p>
+      </div>
+
+      <div id="ocrResult" class="hidden">
+        <div class="fogis-success">
+          <h3>✅ Lineup extracted!</h3>
+          <p id="ocrResultSummary" style="font-size:13px;color:var(--dim);margin-top:6px;line-height:1.5;"></p>
+        </div>
+        <button class="btn btn-primary" style="margin-top:14px;width:100%;" onclick="ocrApply()">Apply &amp; continue →</button>
+        <div style="text-align:center;margin-top:10px;">
+          <button class="skip-link" onclick="ocrReset()">← Try another photo</button>
+        </div>
+      </div>
+
+      <div id="ocrErr" class="msg msg-err hidden" style="margin-top:12px;"></div>
     </div>
   </div>
 
@@ -638,6 +685,7 @@ const _actionPath         = _cfg.actionPath         || '/action';
 const _statePath          = _cfg.statePath          || '/api/state';
 const _configPath         = _cfg.configPath         || '/api/config';
 const _importRosterPath   = _cfg.importRosterPath   || '/import-roster';
+const _ocrRosterPath      = _cfg.ocrRosterPath      || '';
 const _uploadLogoPath     = _cfg.uploadLogoPath     || '/upload-logo';
 const _uploadClubLogoPath = _cfg.uploadClubLogoPath || '';
 const _controllerPath     = _cfg.controllerPath     || ('/controller?token=' + encodeURIComponent(TOKEN));
@@ -1104,6 +1152,103 @@ async function action(act, payload) {
   } catch(e) { console.warn('[wizard] action failed:', e.message); }
 }
 
+// ── Step 0: OCR photo import ───────────────────────────────────────────────────
+let ocrData = null;
+
+function ocrHandleDrop(e) {
+  e.preventDefault();
+  fileDragLeave('ocrFileDrop');
+  const file = e.dataTransfer.files[0];
+  if (file) processOcrFile(file);
+}
+
+function ocrFileSelected(input) {
+  if (input.files[0]) processOcrFile(input.files[0]);
+}
+
+function processOcrFile(file) {
+  const errEl = document.getElementById('ocrErr');
+  errEl.classList.add('hidden');
+  if (file.size > 15 * 1024 * 1024) {
+    errEl.textContent = 'File too large (max 15 MB).';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('ocrUploadPanel').classList.add('hidden');
+  document.getElementById('ocrProcessing').classList.remove('hidden');
+  document.getElementById('ocrResult').classList.add('hidden');
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const res = await fetch(location.origin + _ocrRosterPath, {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, data: e.target.result }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || ('Server error ' + res.status));
+      ocrData = result;
+
+      const hp = (result.homePlayers || []).length;
+      const ap = (result.awayPlayers || []).length;
+      const parts = [
+        (result.homeFullName || '?') + ' vs ' + (result.awayFullName || '?'),
+        hp + ' home + ' + ap + ' away players',
+      ];
+      if (result.arena)       parts.push(result.arena);
+      if (result.kickoffTime) parts.push('Kick-off ' + result.kickoffTime);
+      document.getElementById('ocrResultSummary').textContent = parts.join(' · ');
+
+      document.getElementById('ocrProcessing').classList.add('hidden');
+      document.getElementById('ocrResult').classList.remove('hidden');
+    } catch(err) {
+      document.getElementById('ocrProcessing').classList.add('hidden');
+      document.getElementById('ocrUploadPanel').classList.remove('hidden');
+      errEl.textContent = 'Could not read the lineup sheet: ' + err.message;
+      errEl.classList.remove('hidden');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function ocrReset() {
+  ocrData = null;
+  document.getElementById('ocrResult').classList.add('hidden');
+  document.getElementById('ocrProcessing').classList.add('hidden');
+  document.getElementById('ocrUploadPanel').classList.remove('hidden');
+  document.getElementById('ocrErr').classList.add('hidden');
+  document.getElementById('ocrFileInput').value = '';
+}
+
+function ocrApply() {
+  if (!ocrData) return;
+  prefillFromOcr(ocrData);
+  goTo(1);
+}
+
+function prefillFromOcr(r) {
+  if (r.league)      { data.league      = r.league;      document.getElementById('league').value      = r.league; }
+  if (r.arena)       { data.arena       = r.arena;       document.getElementById('arena').value       = r.arena; }
+  if (r.kickoffTime) { data.kickoffTime = r.kickoffTime; document.getElementById('kickoffTime').value = r.kickoffTime; }
+  if (r.homeFullName) {
+    data.homeFullName = r.homeFullName;
+    document.getElementById('homeFullName').value = r.homeFullName;
+    autoAbbr('home');
+  }
+  if (r.awayFullName) {
+    data.awayFullName = r.awayFullName;
+    document.getElementById('awayFullName').value = r.awayFullName;
+    autoAbbr('away');
+  }
+  function playersToLines(players) {
+    return (players || []).sort((a, b) => a.num - b.num)
+      .map(p => `#${p.num} ${p.name}${p.cap ? ' (C)' : ''}`);
+  }
+  if ((r.homePlayers || []).length) populateLineupRows('home', playersToLines(r.homePlayers), []);
+  if ((r.awayPlayers || []).length) populateLineupRows('away', playersToLines(r.awayPlayers), []);
+}
+
 // ── Step 0: FOGIS ──────────────────────────────────────────────────────────────
 let fogisPoller      = null;
 let fogisSnapshot    = '';
@@ -1112,21 +1257,28 @@ let fogisActive      = false; // true while wizard is waiting for FOGIS data
 function fogisChoose(choice) {
   document.getElementById('fogisAlreadyLoaded').classList.add('hidden');
   const urlArea  = document.getElementById('fogisUrlArea');
+  const ocrArea  = document.getElementById('ocrArea');
   const choiceEl = document.getElementById('fogisChoice');
-  document.getElementById('btnFogisYes').classList.toggle('selected', choice === 'yes');
-  document.getElementById('btnFogisNo').classList.toggle('selected',  choice === 'no');
+  document.getElementById('btnFogisYes').classList.toggle('selected',   choice === 'yes');
+  document.getElementById('btnFogisNo').classList.toggle('selected',    choice === 'no');
+  document.getElementById('btnFogisPhoto').classList.toggle('selected', choice === 'photo');
+
+  ocrArea.classList.add('hidden');
+
   if (choice === 'yes') {
     urlArea.classList.remove('hidden');
     choiceEl.classList.remove('hidden');
-    // Take snapshot and start background polling immediately — so even if the
-    // user opens minfotboll.se themselves and clicks the bookmarklet without
-    // going through the "Open game page" button, we'll detect the change.
     fogisActive = true;
     fetch(_statePath, { headers: { 'X-MFCLIVE-Token': TOKEN } })
       .then(r => r.json())
       .then(st => { fogisSnapshot = JSON.stringify({ home: st.homePlayers, away: st.awayPlayers, homeTeam: st.homeTeam }); })
       .catch(() => { fogisSnapshot = ''; });
     if (!fogisPoller) fogisPoller = setInterval(pollForRoster, 2000);
+  } else if (choice === 'photo') {
+    fogisActive = false;
+    fogisStopPolling();
+    urlArea.classList.add('hidden');
+    ocrArea.classList.remove('hidden');
   } else {
     fogisActive = false;
     fogisStopPolling();

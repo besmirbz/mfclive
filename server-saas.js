@@ -40,6 +40,54 @@ const Database = require('better-sqlite3');
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY || '');
 
+// ── Anthropic SDK (OCR roster import via Claude Vision) ───────────────────────
+const Anthropic = require('@anthropic-ai/sdk');
+let _anthropicClient = null;
+function getAnthropic() {
+  if (!_anthropicClient) _anthropicClient = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY || '' });
+  return _anthropicClient;
+}
+
+async function extractRosterFromImage(base64Data, mediaType) {
+  const backend = (process.env.OCR_BACKEND || 'claude').toLowerCase();
+  if (backend !== 'claude') throw new Error('Only OCR_BACKEND=claude is currently supported.');
+  if (!process.env.CLAUDE_API_KEY) throw new Error('CLAUDE_API_KEY is not set in ecosystem.config.js.');
+
+  const validTypes = ['image/jpeg','image/png','image/gif','image/webp'];
+  const mtype = validTypes.includes(mediaType) ? mediaType : 'image/jpeg';
+
+  const resp = await getAnthropic().messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mtype, data: base64Data } },
+        { type: 'text', text: `Extract the lineup data from this match sheet (likely a FOGIS Swedish football printout). Return ONLY a valid JSON object — no markdown, no explanation:
+{
+  "homeFullName": "full home team name",
+  "awayFullName": "full away team name",
+  "arena": "venue or arena name",
+  "league": "league or competition name",
+  "kickoffTime": "HH:MM in 24-hour format",
+  "homePlayers": [{"num": 7, "name": "Firstname Lastname", "cap": false}],
+  "awayPlayers": [{"num": 1, "name": "Firstname Lastname", "cap": true}]
+}
+Notes: captain is marked (K) or (C); include all players (starters and subs); use "" for missing text, [] for missing players.` }
+      ]
+    }],
+  });
+
+  const text = (resp.content[0]?.text || '').trim();
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('AI response could not be parsed as JSON.');
+  const result = JSON.parse(match[0]);
+  // Normalise — ensure arrays exist
+  result.homePlayers = (result.homePlayers || []).map(p => ({ num: Number(p.num) || 0, name: String(p.name || '').trim(), cap: !!p.cap }));
+  result.awayPlayers = (result.awayPlayers || []).map(p => ({ num: Number(p.num) || 0, name: String(p.name || '').trim(), cap: !!p.cap }));
+  return result;
+}
+
 // ── Nodemailer (transactional email via Zoho SMTP) ────────────────────────────
 const nodemailer = require('nodemailer');
 const mailer = nodemailer.createTransport({
@@ -882,6 +930,33 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
       }
     }
 
+    // OCR roster import — photo of lineup sheet, returns extracted JSON (no state mutation)
+    if (req.method === 'POST' && subpath === '/ocr-roster') {
+      const ocrRateKey = room.slug + ':ocr:' + (req.headers['x-mfclive-token'] || req.socket.remoteAddress || 'anon');
+      if (!checkRateLimit(ocrRateKey, 3)) { res.writeHead(429); res.end('Too Many Requests'); return; }
+      if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+        res.writeHead(415); res.end('Unsupported Media Type'); return;
+      }
+      const chunks = [];
+      req.on('data', d => { chunks.push(d); if (Buffer.concat(chunks).length > 20*1024*1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+      req.on('error', () => {});
+      req.on('end', async () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          const raw  = String(body.data || '').replace(/^data:[^;]+;base64,/, '');
+          const mediaType = (String(body.data || '').match(/^data:([^;]+);/) || [])[1] || 'image/jpeg';
+          if (!raw) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing image data' })); return; }
+          const result = await extractRosterFromImage(raw, mediaType);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch(e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
     // Logo upload — base64 JSON from wizard
     if (req.method === 'POST' && subpath === '/upload-logo') {
       const uploadRateKey = room.slug + ':upload:' + (req.headers['x-mfclive-token'] || req.socket.remoteAddress || 'anon');
@@ -989,6 +1064,7 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
         statePath:         `/clubs/${room.slug}/api/state`,
         configPath:        `/clubs/${room.slug}/api/config`,
         importRosterPath:  `/clubs/${room.slug}/import-roster`,
+        ocrRosterPath:     `/clubs/${room.slug}/ocr-roster`,
         uploadLogoPath:    `/clubs/${room.slug}/upload-logo`,
         controllerPath:    `/clubs/${room.slug}/controller?token=${room.secret}`,
         wizardPath:        `/clubs/${room.slug}/wizard?token=${room.secret}`,

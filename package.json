@@ -12,6 +12,7 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "better-sqlite3": "^9.4.3",
     "nodemailer": "^6.9.0",
     "qrcode": "^1.5.4",
