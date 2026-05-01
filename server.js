@@ -869,7 +869,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       res.writeHead(415); res.end('Unsupported Media Type'); return;
     }
     let body = '';
-    req.on('data', d => { body += d; if (body.length > 6 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+    req.on('data', d => { body += d; if (body.length > 20 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
     req.on('end', () => {
       try {
         const { side, filename, data } = JSON.parse(body);
@@ -878,7 +878,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
         const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
         const buf = Buffer.from(raw, 'base64');
-        if (buf.length > 3 * 1024 * 1024) throw new Error('File too large (max 3 MB)');
+        if (buf.length > 15 * 1024 * 1024) throw new Error('File too large (max 15 MB)');
         fs.mkdirSync(LOGOS_DIR, { recursive: true });
         const safeName = side + '-' + Date.now() + ext;
         fs.writeFileSync(path.join(LOGOS_DIR, safeName), buf);
@@ -955,7 +955,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       res.writeHead(415); res.end('Unsupported Media Type'); return;
     }
     let body = '';
-    req.on('data', d => { body += d; if (body.length > 6 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+    req.on('data', d => { body += d; if (body.length > 20 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
     req.on('end', () => {
       try {
         const { filename, data } = JSON.parse(body);
@@ -963,7 +963,7 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
         if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
         const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
         const buf = Buffer.from(raw, 'base64');
-        if (buf.length > 3 * 1024 * 1024) throw new Error('File too large (max 3 MB)');
+        if (buf.length > 15 * 1024 * 1024) throw new Error('File too large (max 15 MB)');
         fs.mkdirSync(LOGOS_DIR, { recursive: true });
         const safeName = 'club-logo' + ext;
         fs.writeFileSync(path.join(LOGOS_DIR, safeName), buf);

@@ -841,7 +841,7 @@ function clubLogoSelected(input) { if (input.files[0]) handleClubLogoFile(input.
 
 function handleClubLogoFile(file) {
   const msgEl = document.getElementById('clubLogoMsg');
-  if (file.size > 3 * 1024 * 1024) { msgEl.innerHTML = '<div class="msg msg-err">File too large (max 3 MB)</div>'; return; }
+  if (file.size > 15 * 1024 * 1024) { msgEl.innerHTML = '<div class="msg msg-err">File too large (max 15 MB)</div>'; return; }
   const reader = new FileReader();
   reader.onload = async e => {
     const dataUrl = e.target.result;
@@ -1272,7 +1272,7 @@ function fileSelected(side, input) {
 
 function handleLogoFile(side, file) {
   const msgEl = document.getElementById(side + 'LogoMsg');
-  if (file.size > 3 * 1024 * 1024) { msgEl.innerHTML = '<div class="msg msg-err">File too large (max 3 MB)</div>'; return; }
+  if (file.size > 15 * 1024 * 1024) { msgEl.innerHTML = '<div class="msg msg-err">File too large (max 15 MB)</div>'; return; }
   const reader = new FileReader();
   reader.onload = async e => {
     const dataUrl = e.target.result;

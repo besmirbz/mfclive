@@ -890,7 +890,7 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
         res.writeHead(415); res.end('Unsupported Media Type'); return;
       }
       const chunks = [];
-      req.on('data', d => { chunks.push(d); if (Buffer.concat(chunks).length > 6*1024*1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+      req.on('data', d => { chunks.push(d); if (Buffer.concat(chunks).length > 20*1024*1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
       req.on('end', () => {
         try {
           const { side, filename, data } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -899,7 +899,7 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
           if (!['.png','.jpg','.jpeg','.gif','.webp'].includes(ext)) throw new Error('Invalid file type — SVG not allowed (use PNG or WebP)');
           const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
           const buf = Buffer.from(raw, 'base64');
-          if (buf.length > 3*1024*1024) throw new Error('File too large (max 3 MB)');
+          if (buf.length > 15*1024*1024) throw new Error('File too large (max 15 MB)');
           const dir  = path.join(LOGOS_DIR, room.slug);
           fs.mkdirSync(dir, { recursive: true });
           const fname = `${side}-${Date.now()}${ext}`;
