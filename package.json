@@ -12,6 +12,12 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
-    "qrcode": "^1.5.4"
+    "better-sqlite3": "^9.4.3",
+    "nodemailer": "^6.9.0",
+    "qrcode": "^1.5.4",
+    "stripe": "^16.0.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
   }
 }

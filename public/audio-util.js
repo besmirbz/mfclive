@@ -6,6 +6,11 @@ function fadeAudio(audio, toVol, durationMs) {
   toVol = Math.max(0, Math.min(1, toVol));
   durationMs = Math.max(0, durationMs);
   clearInterval(audio._fadeTimer);
+  if (durationMs === 0) {
+    audio.volume = toVol;
+    if (toVol === 0) audio.pause();
+    return;
+  }
   const steps = Math.max(1, Math.round(durationMs / 16));
   const fromVol = audio.volume;
   let step = 0;

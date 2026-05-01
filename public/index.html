@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Futsalplay.live - Professional Live Stream Overlays for Futsal</title>
+  <meta name="description" content="Real-time scoreboard, lineups, and broadcast overlays for futsal clubs. No setup required. Stream like a pro for €12/month.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;600;700;800&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:   #050B18;
+      --blue:   #3D82F6;
+      --blue-dark: #2563EB;
+      --white:  #ffffff;
+      --grey:   #F4F6FA;
+      --text:   #1a2340;
+      --muted:  #5a6580;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Montserrat', sans-serif; color: var(--text); background: var(--white); }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--white);
+      border-bottom: 1px solid #e8ecf4;
+      padding: 0 5%;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 72px;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .nav-logo img { height: 42px; width: auto; }
+    .nav-wordmark { font-family: 'League Spartan', sans-serif; font-weight: 800; font-size: 1.25rem; color: var(--navy); letter-spacing: -0.01em; line-height: 1; }
+    .nav-wordmark .live { color: var(--blue); }
+    .nav-links { display: flex; gap: 32px; list-style: none; }
+    .nav-links a { font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 0.9rem; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--blue); }
+    .nav-cta { display: flex; gap: 12px; align-items: center; }
+    .btn { display: inline-block; padding: 10px 24px; border-radius: 8px; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 0.9rem; text-decoration: none; transition: all 0.2s; cursor: pointer; border: none; }
+    .btn-outline { border: 2px solid var(--blue); color: var(--blue); background: transparent; }
+    .btn-outline:hover { background: var(--blue); color: var(--white); }
+    .btn-primary { background: var(--blue); color: var(--white); }
+    .btn-primary:hover { background: var(--blue-dark); }
+    .btn-large { padding: 15px 36px; font-size: 1rem; border-radius: 10px; }
+    .btn-ghost { background: rgba(255,255,255,0.1); color: var(--white); border: 2px solid rgba(255,255,255,0.3); }
+    .btn-ghost:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.5); }
+
+    /* ── HERO ── */
+    .hero {
+      background: var(--navy);
+      padding: 100px 5% 110px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(61,130,246,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(61,130,246,0.15);
+      border: 1px solid rgba(61,130,246,0.4);
+      color: #7DB8F7;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      border-radius: 100px;
+      margin-bottom: 28px;
+    }
+    .hero h1 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: clamp(2.4rem, 5vw, 4rem);
+      font-weight: 800;
+      color: var(--white);
+      line-height: 1.1;
+      max-width: 780px;
+      margin: 0 auto 20px;
+    }
+    .hero h1 span { color: var(--blue); }
+    .hero p {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: #8fa3c8;
+      max-width: 560px;
+      margin: 0 auto 44px;
+      line-height: 1.7;
+    }
+    .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .hero-sub {
+      margin-top: 48px;
+      color: #4a5a7a;
+      font-size: 0.82rem;
+    }
+    .hero-sub span { color: #6a7fa0; }
+
+    /* ── SECTION COMMON ── */
+    section { padding: 90px 5%; }
+    .section-label {
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--blue);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: 'League Spartan', sans-serif;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 800; color: var(--text);
+      margin-bottom: 16px; line-height: 1.15;
+    }
+    .section-sub {
+      font-size: 1rem; color: var(--muted);
+      max-width: 560px; line-height: 1.7;
+    }
+    .centered { text-align: center; }
+    .centered .section-sub { margin: 0 auto; }
+
+    /* ── HOW IT WORKS ── */
+    .how { background: var(--grey); }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 40px;
+      margin-top: 56px;
+    }
+    .step { text-align: center; padding: 0 16px; }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--blue); color: var(--white);
+      font-family: 'League Spartan', sans-serif;
+      font-size: 1.4rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .step h3 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 1.2rem; font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .step p { color: var(--muted); font-size: 0.93rem; line-height: 1.65; }
+
+    /* ── FEATURES ── */
+    .features { background: var(--white); }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 28px;
+      margin-top: 56px;
+    }
+    .feature-card {
+      border: 1px solid #e4eaf5;
+      border-radius: 16px;
+      padding: 36px 32px;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .feature-card:hover { box-shadow: 0 8px 32px rgba(61,130,246,0.1); transform: translateY(-2px); }
+    .feature-icon {
+      font-size: 2.2rem; margin-bottom: 18px;
+    }
+    .feature-card h3 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 1.2rem; font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .feature-card p { color: var(--muted); font-size: 0.93rem; line-height: 1.65; }
+    .feature-tag {
+      display: inline-block; margin-top: 16px;
+      background: #EEF4FF; color: var(--blue);
+      font-size: 0.75rem; font-weight: 600;
+      padding: 4px 12px; border-radius: 100px;
+    }
+
+    /* ── PRICING ── */
+    .pricing { background: var(--grey); }
+    .pricing-card {
+      max-width: 440px; margin: 56px auto 0;
+      background: var(--white);
+      border: 2px solid var(--blue);
+      border-radius: 20px;
+      padding: 48px 44px;
+      text-align: center;
+      box-shadow: 0 16px 48px rgba(61,130,246,0.12);
+    }
+    .pricing-label {
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--blue);
+      margin-bottom: 8px;
+    }
+    .pricing-card h2 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 2rem; font-weight: 800; margin-bottom: 24px;
+    }
+    .price {
+      display: flex; align-items: baseline;
+      justify-content: center; gap: 4px;
+      margin-bottom: 8px;
+    }
+    .price-currency { font-size: 1.6rem; font-weight: 700; color: var(--text); }
+    .price-amount {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 4rem; font-weight: 800; color: var(--text);
+      line-height: 1;
+    }
+    .price-period { color: var(--muted); font-size: 1rem; }
+    .price-sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 32px; }
+    .pricing-features { list-style: none; text-align: left; margin-bottom: 36px; }
+    .pricing-features li {
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f3fa;
+      font-size: 0.93rem;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .pricing-features li:last-child { border-bottom: none; }
+    .check { color: var(--blue); font-weight: 700; font-size: 1.1rem; }
+    .pricing-note { margin-top: 20px; color: var(--muted); font-size: 0.82rem; }
+
+    /* ── CTA BAND ── */
+    .cta-band {
+      background: var(--navy);
+      text-align: center;
+      padding: 80px 5%;
+    }
+    .cta-band h2 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: clamp(1.8rem, 3vw, 2.8rem);
+      font-weight: 800; color: var(--white);
+      margin-bottom: 16px;
+    }
+    .cta-band p { color: #8fa3c8; margin-bottom: 36px; font-size: 1rem; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--navy);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 40px 5%;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 1.1rem; font-weight: 700; color: var(--white);
+    }
+    .footer-logo span { color: var(--blue); }
+    footer p { color: #3a4a6a; font-size: 0.82rem; }
+    footer a { color: #4a5a7a; text-decoration: none; font-size: 0.82rem; }
+    footer a:hover { color: var(--blue); }
+    .footer-links { display: flex; gap: 24px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .nav-wordmark { display: none; }
+      .hero-buttons { flex-direction: column; align-items: center; }
+      .pricing-card { padding: 36px 24px; }
+      footer { flex-direction: column; text-align: center; }
+      .footer-links { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-logo" href="/">
+      <img src="/img/logo.svg" alt="Futsalplay.live">
+      <span class="nav-wordmark">FutsalPlay<span class="live">.live</span></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="mailto:info@futsalplay.live" class="btn btn-outline">Contact</a>
+      <a href="/signup" class="btn btn-primary">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">You play, we stream it!</div>
+    <h1>Your matches deserve <span>professional graphics</span></h1>
+    <p>Real-time scoreboard, lineups, and lower thirds for your live stream. Works with OBS, Streamlabs, and any browser source. No setup required.</p>
+    <div class="hero-buttons">
+      <a href="/signup" class="btn btn-primary btn-large">Get Started - €12/month</a>
+      <a href="#how" class="btn btn-ghost btn-large">See how it works</a>
+    </div>
+    <p class="hero-sub">Cancel anytime. <span>Trusted by futsal clubs in Sweden.</span></p>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="how">
+    <div class="centered">
+      <div class="section-label">Simple setup</div>
+      <h2 class="section-title">Live in three steps</h2>
+      <p class="section-sub">From signup to your first broadcast in under 10 minutes. No software to install, no technical knowledge required.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Sign up your club</h3>
+        <p>Create your club account and get your unique controller link and overlay URLs instantly.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Add browser sources</h3>
+        <p>Paste your overlay URLs into OBS or Streamlabs as browser sources. Takes less than two minutes.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Go live</h3>
+        <p>Open the controller on any device. Update scores, manage the clock, and control every overlay in real time.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="centered">
+      <div class="section-label">What you get</div>
+      <h2 class="section-title">Everything your stream needs</h2>
+      <p class="section-sub">Built specifically for futsal, with the speed and precision that live sport demands.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🎮</div>
+        <h3>The Command Center</h3>
+        <p>A web-based controller built for high-pressure moments. Manage the scoreboard, game clock, fouls, periods, and team names from any phone or tablet.</p>
+        <span class="feature-tag">Works on any device</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📺</div>
+        <h3>Broadcast Overlays</h3>
+        <p>Scoreboard, starting soon screen, lineup cards, and animated lower thirds. Designed to match the look of professional sports broadcasts.</p>
+        <span class="feature-tag">OBS and Streamlabs ready</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Real-Time Updates</h3>
+        <p>Every action on the controller is reflected on the stream within milliseconds. No lag, no manual refresh, no missed moments.</p>
+        <span class="feature-tag">Zero latency</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="pricing" id="pricing">
+    <div class="centered">
+      <div class="section-label">Pricing</div>
+      <h2 class="section-title">One plan. Everything included.</h2>
+      <p class="section-sub">No tiers, no hidden fees. One flat price gets your club the full broadcast suite.</p>
+    </div>
+    <div class="pricing-card">
+      <div class="pricing-label">Club plan</div>
+      <h2>All-inclusive</h2>
+      <div class="price">
+        <span class="price-currency">€</span>
+        <span class="price-amount">12</span>
+        <span class="price-period">/month</span>
+      </div>
+      <p class="price-sub">per club, billed monthly</p>
+      <ul class="pricing-features">
+        <li><span class="check">✓</span> Live scoreboard overlay</li>
+        <li><span class="check">✓</span> Lineup and lower third overlays</li>
+        <li><span class="check">✓</span> Starting Soon and BRB screens</li>
+        <li><span class="check">✓</span> Real-time controller (any device)</li>
+        <li><span class="check">✓</span> Unlimited games per season</li>
+        <li><span class="check">✓</span> Works with OBS and Streamlabs</li>
+        <li><span class="check">✓</span> No software to install</li>
+      </ul>
+      <a href="/signup" class="btn btn-primary btn-large" style="width:100%;text-align:center;">Get Started</a>
+      <p class="pricing-note">Sign up in minutes. Your controller and overlay links are sent to your email instantly.</p>
+    </div>
+  </section>
+
+  <!-- CTA BAND -->
+  <section class="cta-band">
+    <h2>Ready to go live?</h2>
+    <p>Join futsal clubs streaming with professional graphics. Setup takes 10 minutes.</p>
+    <a href="/signup" class="btn btn-primary btn-large">Get Started Today</a>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo">Futsalplay<span>.live</span></div>
+    <p>© 2026 Futsalplay.live. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="mailto:info@futsalplay.live">Contact</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/guide">Guide</a>
+    </div>
+  </footer>
+
+</body>
+</html>

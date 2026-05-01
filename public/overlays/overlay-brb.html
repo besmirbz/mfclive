@@ -283,9 +283,10 @@
 let _sseDelay = 1000;
 let _sseRetries = 0;
 const _SSE_MAX_RETRIES = 30;
+const _tok = new URLSearchParams(location.search).get('token');
 function connectSSE() {
   if (_sseRetries >= _SSE_MAX_RETRIES) { console.warn('[sse] giving up after max retries'); return; }
-  const es = new EventSource('/events');
+  const es = new EventSource('/events' + (_tok ? '?token=' + _tok : ''));
   es.onopen  = () => { _sseDelay = 1000; _sseRetries = 0; };
   es.onerror = () => {
     es.close();

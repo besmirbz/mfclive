@@ -27,7 +27,7 @@ let QRCode; try { QRCode = require('qrcode'); } catch(e) { /* optional */ }
 let _qrDataUrl = '';
 
 const PORT = Number(config.port) || 3000;
-const MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : ['malmö futsal', 'mfc'];
+let MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : [];
 
 // ── Detect local LAN IP ────────────────────────────────────────────────────────
 // Prefers real WiFi/Ethernet adapters; skips virtual adapters (VirtualBox, VMware, WSL, etc.)
@@ -59,10 +59,11 @@ function getLocalIP() {
 // Requires no account — generates a temporary *.trycloudflare.com URL per session.
 // We wait for cloudflared's "registered" log line before advertising the URL,
 // because cloudflared prints the URL *before* the edge connection is fully ready.
-let _tunnelUrl   = '';
-let _tunnelProc  = null;
+let _tunnelUrl    = '';
+let _tunnelProc   = null;
+let _tunnelStatus = 'unavailable'; // 'connecting' | 'ready' | 'failed' | 'unavailable'
 
-function startCloudflaredTunnel(port, onUrl) {
+function startCloudflaredTunnel(port, onUrl, onFail) {
   const { spawn, spawnSync } = require('child_process');
   const candidates = [
     'cloudflared',
@@ -75,9 +76,10 @@ function startCloudflaredTunnel(port, onUrl) {
     const r = spawnSync(c, ['--version'], { stdio: 'ignore', timeout: 3000 });
     if (!r.error && r.status === 0) { bin = c; break; }
   }
-  if (!bin) { console.log('   [tunnel] cloudflared not found — skipping tunnel'); return false; }
+  if (!bin) { console.log('   [tunnel] cloudflared not found — skipping tunnel'); _tunnelStatus = 'unavailable'; return false; }
 
   console.log('   [tunnel] starting cloudflared…');
+  _tunnelStatus = 'connecting';
   // Write a minimal blank config so cloudflared ignores any pre-existing
   // ~/.cloudflared/config.yaml (which may have named-tunnel ingress rules
   // with a catch-all http_status:404 that overrides our --url argument).
@@ -91,7 +93,10 @@ function startCloudflaredTunnel(port, onUrl) {
     });
   } catch(e) { console.warn('   [tunnel] failed to spawn cloudflared:', e.message); return; }
 
-  const urlRe        = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
+  // Real quick-tunnel subdomains always contain hyphens (e.g. silver-trying-portland-sometime).
+  // Requiring at least one hyphen prevents matching Cloudflare API domains like api.trycloudflare.com
+  // that appear in error responses when the tunnel fails.
+  const urlRe        = /https:\/\/[a-z0-9][a-z0-9-]*-[a-z0-9][a-z0-9-]*\.trycloudflare\.com/;
   // Matches cloudflared's "Registered tunnel connection connIndex=0" line.
   // After seeing this we wait PROPAGATION_DELAY for Cloudflare's routing to
   // propagate to all edge POPs — probing from our own machine is unreliable
@@ -102,10 +107,13 @@ function startCloudflaredTunnel(port, onUrl) {
 
   let capturedUrl   = null;
   let fallbackTimer = null;
+  let advertiseTimer = null;
+  let dead          = false; // set true if cloudflared exits with an error
 
   function advertise() {
-    if (_tunnelUrl || !capturedUrl) return;
+    if (_tunnelUrl || !capturedUrl || dead) return;
     _tunnelUrl = capturedUrl;
+    _tunnelStatus = 'ready';
     onUrl(_tunnelUrl);
   }
 
@@ -124,7 +132,7 @@ function startCloudflaredTunnel(port, onUrl) {
     if (capturedUrl && !_tunnelUrl && registeredRe.test(str)) {
       clearTimeout(fallbackTimer);
       console.log(`   [tunnel] registered — waiting ${PROPAGATION_DELAY / 1000}s for global propagation…`);
-      setTimeout(advertise, PROPAGATION_DELAY);
+      advertiseTimer = setTimeout(advertise, PROPAGATION_DELAY);
     }
   }
 
@@ -132,7 +140,14 @@ function startCloudflaredTunnel(port, onUrl) {
   _tunnelProc.stderr.on('data', handle);
   _tunnelProc.on('error', e => console.warn('   [tunnel] cloudflared error:', e.message));
   _tunnelProc.on('exit', code => {
-    if (code !== 0 && code !== null) console.warn(`   [tunnel] cloudflared exited (code ${code})`);
+    if (code !== 0 && code !== null) {
+      dead = true;
+      clearTimeout(fallbackTimer);
+      clearTimeout(advertiseTimer);
+      _tunnelStatus = 'failed';
+      console.warn(`   [tunnel] cloudflared exited (code ${code})`);
+      if (!_tunnelUrl && onFail) onFail(); // tunnel never came up — trigger fallback
+    }
     if (_tunnelUrl) { _tunnelUrl = ''; console.log('   [tunnel] tunnel disconnected'); }
   });
 
@@ -177,23 +192,24 @@ function esc(str) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-const HALF_DURATION_MS = (Number(config.halfDurationMinutes) || 20) * 60 * 1000;
+let PERIOD_DURATION_MS = (Number(config.periodDuration) || 20) * 60 * 1000;
+let NUM_PERIODS = Math.max(1, Math.min(10, Number(config.numberOfPeriods) || 2));
 
 // ── Runtime flags ──────────────────────────────────────────────────────────────
 let _wasRestored = false; // set true by restoreState() if a meaningful snapshot was recovered
 
 // ── Game State ─────────────────────────────────────────────────────────────────
 const state = {
-  homeTeam:  'MFC',
-  awayTeam:  'AWAY',
+  homeTeam:  '',
+  awayTeam:  '',
   homeScore: 0,
   awayScore: 0,
   period:    1,
-  // Timer — counts DOWN from HALF_DURATION_MS to 0
-  timerMs:      HALF_DURATION_MS,
+  // Timer — counts DOWN from PERIOD_DURATION_MS to 0
+  timerMs:      PERIOD_DURATION_MS,
   timerRunning: false,
   timerStart:   null,   // Date.now() snapshot when last started
-  timerBaseMs:  HALF_DURATION_MS, // value of timerMs at last start
+  timerBaseMs:  PERIOD_DURATION_MS, // value of timerMs at last start
   // Fouls — reset each half
   homeFouls: 0,
   awayFouls: 0,
@@ -234,6 +250,7 @@ const state = {
 // restart mid-match can recover scores, timer, fouls, lineups, etc.
 const STATE_FILE = path.join(os.homedir(), '.mfclive', 'state.json');
 const LOGOS_DIR  = path.join(os.homedir(), '.mfclive', 'logos');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 function saveState() {
   const snapshot = {
@@ -292,7 +309,7 @@ function restoreState() {
       kickoffTime:   snap.kickoffTime   || '',
     });
     if ((snap.homeScore || 0) > 0 || (snap.awayScore || 0) > 0 ||
-        (snap.timerMs != null && snap.timerMs < HALF_DURATION_MS - 5000)) {
+        (snap.timerMs != null && snap.timerMs < PERIOD_DURATION_MS - 5000)) {
       _wasRestored = true;
     }
     console.log(`[state] Restored from snapshot — ${state.homeTeam} ${state.homeScore}–${state.awayScore} ${state.awayTeam}`);
@@ -306,8 +323,14 @@ restoreState();
 // ── SSE clients ────────────────────────────────────────────────────────────────
 const clients = new Set();
 
+// SSE_PAD ensures each broadcast exceeds Cloudflare's proxy read-buffer (~4 KB)
+// so the event is flushed to the browser immediately rather than held until the
+// buffer fills. The padding is an SSE comment (starts with ':') and is ignored
+// by EventSource clients.
+const _SSE_PAD = ': ' + ' '.repeat(4093) + '\n\n';
+
 function broadcast(data) {
-  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  const msg = _SSE_PAD + `data: ${JSON.stringify(data)}\n\n`;
   for (const res of [...clients]) {
     try { res.write(msg); } catch(e) { clients.delete(res); console.error('[sse] dropped client:', e.message); }
   }
@@ -347,7 +370,9 @@ function getPublicState() {
     kickoffTime:     state.kickoffTime || '',
     arena:           state.arena,
     league:          state.league,
-    wasRestored:     _wasRestored,
+    wasRestored:      _wasRestored,
+    periodDurationMs: PERIOD_DURATION_MS,
+    numberOfPeriods:  NUM_PERIODS,
     homePlayers:  state._homePlayers || [],
     awayPlayers:  state._awayPlayers || [],
     homeStarters:  state._homeStarters  || [],
@@ -413,8 +438,8 @@ function handleAction(action, payload) {
       break;
 
     case 'timer_reset':
-      state.timerMs      = HALF_DURATION_MS;
-      state.timerBaseMs  = HALF_DURATION_MS;
+      state.timerMs      = PERIOD_DURATION_MS;
+      state.timerBaseMs  = PERIOD_DURATION_MS;
       state.timerRunning = false;
       state.timerStart   = null;
       break;
@@ -473,8 +498,8 @@ function handleAction(action, payload) {
       state.halfTime  = false;
       state.homeFouls = 0;
       state.awayFouls = 0;
-      state.timerMs   = HALF_DURATION_MS;
-      state.timerBaseMs = HALF_DURATION_MS;
+      state.timerMs   = PERIOD_DURATION_MS;
+      state.timerBaseMs = PERIOD_DURATION_MS;
       state.timerRunning = false;
       break;
 
@@ -566,7 +591,7 @@ function handleAction(action, payload) {
       state.ytUrl = (typeof payload.url === 'string') ? payload.url.slice(0, 300) : '';
       break;
     case 'timer_set':
-      state.timerMs = Math.min(HALF_DURATION_MS, Math.max(0, payload.ms || 0));
+      state.timerMs = Math.min(PERIOD_DURATION_MS, Math.max(0, payload.ms || 0));
       state.timerRunning = false;
       break;
 
@@ -582,8 +607,8 @@ function handleAction(action, payload) {
       state.redCards     = [];
       state.period       = 1;
       state.halfTime     = false;
-      state.timerMs      = HALF_DURATION_MS;
-      state.timerBaseMs  = HALF_DURATION_MS;
+      state.timerMs      = PERIOD_DURATION_MS;
+      state.timerBaseMs  = PERIOD_DURATION_MS;
       state.timerRunning = false;
       state.timerStart   = null;
       state.lowerThird   = { visible: false, line1: '', line2: '', team: '', event: '' };
@@ -726,11 +751,15 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     const tunnelControllerUrl = _tunnelUrl ? `${_tunnelUrl}/controller?token=${SECRET}` : null;
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     res.end(JSON.stringify({
-      localUrl:   localControllerUrl,
-      tunnelUrl:  tunnelControllerUrl,
-      qrDataUrl:  _qrDataUrl,
-      club:       config.club || 'MFCLIVE',
-      port:       PORT,
+      localUrl:        localControllerUrl,
+      tunnelUrl:       tunnelControllerUrl,
+      tunnelStatus:    _tunnelStatus,
+      qrDataUrl:       _qrDataUrl,
+      club:            config.club || 'MFCLIVE',
+      port:            PORT,
+      accentColour:    config.accentColour || '#3D82F6',
+      numberOfPeriods: NUM_PERIODS,
+      periodDuration:  Number(config.periodDuration) || 20,
     }));
     return;
   }
@@ -868,28 +897,130 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
     return;
   }
 
+  // ── Config API ─────────────────────────────────────────────────────────────────
+  if (route === '/api/config' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify({
+      club:            config.club || '',
+      accentColour:    config.accentColour || '#3D82F6',
+      numberOfPeriods: NUM_PERIODS,
+      periodDuration:  Number(config.periodDuration) || 20,
+      logoPath:        config.logoPath || '',
+    }));
+    return;
+  }
+
+  if (route === '/api/config' && req.method === 'POST') {
+    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+      res.writeHead(415); res.end('Unsupported Media Type'); return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; if (body.length > 4096) { res.writeHead(413); res.end('Too large'); req.socket.destroy(); } });
+    req.on('end', () => {
+      try {
+        const updates = JSON.parse(body || '{}');
+        const validators = {
+          club:            v => typeof v === 'string' && v.trim().length <= 60,
+          accentColour:    v => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v),
+          numberOfPeriods: v => Number.isInteger(v) && v >= 1 && v <= 10,
+          periodDuration:  v => Number.isInteger(v) && v >= 1 && v <= 90,
+        };
+        const errors = [];
+        for (const [key, val] of Object.entries(updates)) {
+          if (!validators[key]) { errors.push(`Unknown field: ${key}`); continue; }
+          if (!validators[key](val)) { errors.push(`Invalid value for ${key}`); continue; }
+          config[key] = (key === 'club') ? val.trim() : val;
+        }
+        if (errors.length) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ errors })); return; }
+        // Hot-apply mutable runtime values
+        PERIOD_DURATION_MS = (Number(config.periodDuration) || 20) * 60 * 1000;
+        NUM_PERIODS = Math.max(1, Math.min(10, Number(config.numberOfPeriods) || 2));
+        MFC_KEYWORDS = Array.isArray(config.clubKeywords) ? config.clubKeywords : [];
+        // Persist to config.json
+        const cfgPath = path.join(__dirname, 'config.json');
+        fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch(e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // ── Club logo upload ────────────────────────────────────────────────────────────
+  if (req.method === 'POST' && route === '/upload-club-logo') {
+    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
+      res.writeHead(415); res.end('Unsupported Media Type'); return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; if (body.length > 6 * 1024 * 1024) { res.writeHead(413); res.end('File too large'); req.socket.destroy(); } });
+    req.on('end', () => {
+      try {
+        const { filename, data } = JSON.parse(body);
+        const ext = path.extname(String(filename || '')).toLowerCase();
+        if (!['.png','.jpg','.jpeg','.gif','.webp','.svg'].includes(ext)) throw new Error('Invalid file type');
+        const raw = String(data || '').replace(/^data:[^;]+;base64,/, '');
+        const buf = Buffer.from(raw, 'base64');
+        if (buf.length > 3 * 1024 * 1024) throw new Error('File too large (max 3 MB)');
+        fs.mkdirSync(LOGOS_DIR, { recursive: true });
+        const safeName = 'club-logo' + ext;
+        fs.writeFileSync(path.join(LOGOS_DIR, safeName), buf);
+        config.logoPath = safeName;
+        const cfgPath = path.join(__dirname, 'config.json');
+        fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch(e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // ── Club logo serve ─────────────────────────────────────────────────────────────
+  if (route === '/logo/club') {
+    const logoName = config.logoPath ? path.basename(config.logoPath) : '';
+    if (!logoName) { res.writeHead(404); res.end('No club logo set'); return; }
+    const fp = path.join(LOGOS_DIR, logoName);
+    if (!fs.existsSync(fp)) { res.writeHead(404); res.end('Club logo file not found'); return; }
+    const mime = { '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif', '.svg':'image/svg+xml', '.webp':'image/webp' }[path.extname(logoName).toLowerCase()] || 'image/png';
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' });
+    fs.createReadStream(fp).pipe(res);
+    return;
+  }
+
     // ── Serve HTML overlay files ────────────────────────────────────────────────
   const fileMap = {
     '/':              'controller.html',
     '/controller':    'controller.html',
     '/bookmarklet':   'bookmarklet.html',
     '/game-setup':    'wizard.html',
-    '/scoreboard':    'overlay-scoreboard.html',
-    '/lowerthird':    'overlay-lowerthird.html',
-    '/lineup':        'overlay-lineup.html',
-    '/brb':           'overlay-brb.html',
-    '/startingsoon':  'overlay-startingsoon.html',
+    '/scoreboard':    'overlays/overlay-scoreboard.html',
+    '/lowerthird':    'overlays/overlay-lowerthird.html',
+    '/lineup':        'overlays/overlay-lineup.html',
+    '/brb':           'overlays/overlay-brb.html',
+    '/startingsoon':  'overlays/overlay-startingsoon.html',
+    '/overlay':       'overlays/overlay.html',
     '/audio-util.js': 'audio-util.js',
   };
   const jsFiles = new Set(['audio-util.js']);
   const file = fileMap[route];
   if (file) {
-    const fp = path.join(__dirname, file);
+    const fp = path.join(PUBLIC_DIR, file);
     if (fs.existsSync(fp)) {
       let html = fs.readFileSync(fp, 'utf8');
       // Inject session token into controller and bookmarklet
-      if (file === 'controller.html' || file === 'bookmarklet.html' || file === 'wizard.html') {
-        html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};</script>\n</head>`);
+      if (file === 'controller.html' || file === 'bookmarklet.html' || file === 'wizard.html' || file === 'overlays/overlay.html') {
+        const clientCfg = JSON.stringify({
+          club:            config.club || 'MFCLIVE',
+          accentColour:    config.accentColour || '#3D82F6',
+          numberOfPeriods: NUM_PERIODS,
+          periodDuration:  Number(config.periodDuration) || 20,
+        });
+        html = html.replace('</head>', `<script>window._MFCLIVE_TOKEN=${JSON.stringify(SECRET)};window._MFCLIVE_CONFIG=${clientCfg};</script>\n</head>`);
       }
       const ct = jsFiles.has(file) ? 'application/javascript' : 'text/html';
       res.writeHead(200, { 'Content-Type': ct });
@@ -1012,18 +1143,25 @@ server.listen(PORT, '0.0.0.0', () => {
   // will show the tunnel QR as soon as it becomes available.
   openBrowser();
 
-  const tunnelStarting = startCloudflaredTunnel(PORT, tunnelBase => {
-    const tunnelControllerUrl = `${tunnelBase}/controller?token=${SECRET}`;
-    console.log(`\n   ☁  Tunnel ready — use this on your phone (any network):`);
-    console.log(`   Controller  →  ${tunnelBase}/controller?token=${maskedToken}\n`);
-    generateQR(tunnelControllerUrl);
-  });
-
-  if (!tunnelStarting) {
-    // No cloudflared — show local URL as fallback.
+  function showLocalFallback() {
     console.log(`\n   📡  No tunnel — phone must be on the same Wi-Fi:`);
     console.log(`   Controller  →  http://${localIP}:${PORT}/controller?token=${maskedToken}\n`);
     generateQR(controllerUrl);
+  }
+
+  const tunnelStarting = startCloudflaredTunnel(PORT,
+    tunnelBase => {
+      const tunnelControllerUrl = `${tunnelBase}/controller?token=${SECRET}`;
+      console.log(`\n   ☁  Tunnel ready — use this on your phone (any network):`);
+      console.log(`   Controller  →  ${tunnelBase}/controller?token=${maskedToken}\n`);
+      generateQR(tunnelControllerUrl);
+    },
+    showLocalFallback  // called if cloudflared starts but fails before advertising a URL
+  );
+
+  if (!tunnelStarting) {
+    // cloudflared not found at all — show local URL immediately.
+    showLocalFallback();
   }
 });
 

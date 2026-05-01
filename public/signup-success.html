@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You are live - Futsalplay.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@700;800&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --navy: #050B18; --blue: #3D82F6; --white: #ffffff; --grey: #F4F6FA; --text: #1a2340; --muted: #5a6580; }
+    body { font-family: 'Montserrat', sans-serif; background: var(--grey); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    nav {
+      background: var(--white); border-bottom: 1px solid #e8ecf4;
+      padding: 0 5%; height: 72px;
+      display: flex; align-items: center;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .nav-logo img { height: 42px; width: auto; }
+    .nav-wordmark { font-family: 'League Spartan', sans-serif; font-weight: 800; font-size: 1.25rem; color: var(--navy); letter-spacing: -0.01em; line-height: 1; }
+    .nav-wordmark .live { color: var(--blue); }
+
+    main {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 48px 16px;
+    }
+    .card {
+      background: var(--white); border-radius: 20px;
+      padding: 56px 44px; width: 100%; max-width: 500px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+      text-align: center;
+    }
+    .icon { font-size: 3.5rem; margin-bottom: 20px; }
+    h1 {
+      font-family: 'League Spartan', sans-serif;
+      font-size: 2rem; font-weight: 800; margin-bottom: 12px;
+    }
+    p { color: var(--muted); font-size: 0.95rem; line-height: 1.7; margin-bottom: 16px; }
+    p strong { color: var(--text); }
+
+    .steps {
+      text-align: left; margin: 32px 0;
+      background: var(--grey); border-radius: 12px;
+      padding: 24px 28px;
+    }
+    .steps h3 { font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); margin-bottom: 16px; }
+    .step-item { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+    .step-item:last-child { margin-bottom: 0; }
+    .step-dot {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--blue); color: white;
+      font-size: 0.75rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .step-text { font-size: 0.88rem; line-height: 1.55; color: var(--text); }
+
+    .btn {
+      display: inline-block; padding: 13px 32px;
+      background: var(--blue); color: var(--white);
+      border-radius: 10px; text-decoration: none;
+      font-weight: 600; font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #2563EB; }
+
+    footer { text-align: center; padding: 24px; font-size: 0.8rem; color: #9aaabf; }
+    footer a { color: #7a8fa8; text-decoration: none; }
+
+    @media (max-width: 500px) { .card { padding: 36px 20px; } }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a class="nav-logo" href="/"><img src="/img/logo.svg" alt="Futsalplay.live"><span class="nav-wordmark">FutsalPlay<span class="live">.live</span></span></a>
+  </nav>
+
+  <main>
+    <div class="card">
+      <div class="icon">🎉</div>
+      <h1>Payment confirmed!</h1>
+      <p>Welcome to Futsalplay.live. Your club is being set up right now.</p>
+      <p><strong>Check your email.</strong> Your controller link and overlay URLs will arrive within a few minutes.</p>
+
+      <div class="steps">
+        <h3>What happens next</h3>
+        <div class="step-item">
+          <div class="step-dot">1</div>
+          <div class="step-text">You will receive an email with your controller link and overlay URLs.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-dot">2</div>
+          <div class="step-text">Open your controller link on any device and go to your streaming software.</div>
+        </div>
+        <div class="step-item">
+          <div class="step-dot">3</div>
+          <div class="step-text">Add the overlay URLs as browser sources in OBS or Streamlabs and you are live.</div>
+        </div>
+      </div>
+
+      <p>Questions? Write to us at <strong>info@futsalplay.live</strong> and we will help you get set up.</p>
+      <br>
+      <a href="/guide" class="btn">Read the getting started guide</a>
+      <br><br>
+      <a href="/" style="font-size:0.85rem;color:var(--muted);text-decoration:none;">Back to home</a>
+    </div>
+  </main>
+
+  <footer>
+    <a href="/">futsalplay.live</a> &nbsp;|&nbsp; <a href="mailto:info@futsalplay.live">info@futsalplay.live</a>
+  </footer>
+
+</body>
+</html>
