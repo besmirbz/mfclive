@@ -962,6 +962,7 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
     const fileMap = {
       '/':             'controller.html',
       '/controller':   'controller.html',
+      '/account':      'account.html',
       '/wizard':       'wizard.html',
       '/bookmarklet':  'bookmarklet.html',
       '/overlay':      'overlays/overlay.html',
@@ -992,6 +993,8 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
         controllerPath:    `/clubs/${room.slug}/controller?token=${room.secret}`,
         wizardPath:        `/clubs/${room.slug}/wizard?token=${room.secret}`,
         bookmarkletPath:   `/clubs/${room.slug}/bookmarklet?token=${room.secret}`,
+        overlayPath:       `/clubs/${room.slug}/overlay?token=${room.secret}`,
+        accountPath:       `/clubs/${room.slug}/account?token=${room.secret}`,
         logoHomePath:      `/clubs/${room.slug}/logo/home`,
         logoAwayPath:      `/clubs/${room.slug}/logo/away`,
       });
@@ -1100,6 +1103,7 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
             const controllerUrl   = `https://futsalplay.live/clubs/${slug}/controller?token=${secret}`;
             const wizardUrl       = `https://futsalplay.live/clubs/${slug}/wizard?token=${secret}`;
             const overlayUrl      = `https://futsalplay.live/clubs/${slug}/overlay?token=${secret}`;
+            const accountUrl      = `https://futsalplay.live/clubs/${slug}/account?token=${secret}`;
 
             await mailer.sendMail({
               from:    '"Futsalplay.live" <info@futsalplay.live>',
@@ -1110,16 +1114,19 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
                 ``,
                 `Your club "${clubName}" is live on Futsalplay.live.`,
                 ``,
+                `Bookmark your club account page — you can always find all your links there:`,
+                accountUrl,
+                ``,
                 `Start here — Game Setup Wizard (set up teams and lineups before your first game):`,
                 wizardUrl,
                 ``,
                 `Controller (open on any device to manage the game):`,
                 controllerUrl,
                 ``,
-                `Overlay URL (add as a browser source in OBS or Streamlabs):`,
+                `Overlay URL (add as a browser source in OBS or Streamlabs, 1920x1080):`,
                 overlayUrl,
                 ``,
-                `Keep these links safe. Anyone with the link can access your controller.`,
+                `These links are permanent and never expire. Keep them safe — anyone with the link can access your controller.`,
                 ``,
                 `Questions? Reply to this email or write to info@futsalplay.live.`,
                 ``,
@@ -1130,7 +1137,14 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
                 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1a2340;">
                   <p style="font-family:'League Spartan',Arial,sans-serif;font-size:1.6rem;font-weight:800;letter-spacing:-0.01em;margin:0 0 24px;line-height:1;">FutsalPlay<span style="color:#3D82F6;">.live</span></p>
                   <h2 style="font-size:1.4rem;margin-bottom:8px;">Your club is ready!</h2>
-                  <p style="color:#5a6580;">Hi, welcome to Futsalplay.live. Here are your links for <strong>${esc(clubName)}</strong>.</p>
+                  <p style="color:#5a6580;">Hi, welcome to Futsalplay.live. Here are your links for <strong>${esc(clubName)}</strong>. Bookmark the account page below &mdash; all your links will always be there.</p>
+
+                  <div style="background:#050B18;border-radius:10px;padding:20px 24px;margin:24px 0;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Your Club Account</p>
+                    <p style="font-size:0.82rem;color:rgba(255,255,255,0.6);margin-bottom:12px;">Bookmark this page. All your links live here permanently and never expire.</p>
+                    <a href="${accountUrl}" style="display:inline-block;background:#3D82F6;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Open My Account</a>
+                    <p style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:10px;word-break:break-all;">${accountUrl}</p>
+                  </div>
 
                   <div style="background:#F4F6FA;border-radius:10px;padding:20px 24px;margin:24px 0;">
                     <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Start here — Game Setup</p>
@@ -1152,7 +1166,7 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
                     <p style="font-size:0.75rem;color:#9aaabf;word-break:break-all;">${overlayUrl}</p>
                   </div>
 
-<p style="font-size:0.85rem;color:#5a6580;">Keep these links safe. Anyone with the link can access your controller.</p>
+                  <p style="font-size:0.85rem;color:#5a6580;">These links are permanent and never expire. Keep them safe &mdash; anyone with the link can access your controller.</p>
                   <p style="font-size:0.85rem;color:#5a6580;margin-top:16px;">Questions? Reply to this email and we will help you get set up.</p>
                   <hr style="border:none;border-top:1px solid #e4eaf5;margin:28px 0;">
                   <p style="font-size:0.78rem;color:#9aaabf;">Futsalplay.live &mdash; You play, we stream it.</p>
