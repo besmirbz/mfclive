@@ -59,13 +59,13 @@ async function run() {
   console.log('\nPaging through Stripe checkout sessions...');
 
   while (hasMore) {
-    const params = { mode: 'subscription', limit: 100, expand: ['data.subscription'] };
+    const params = { limit: 100 };
     if (startingAfter) params.starting_after = startingAfter;
 
     const page = await stripe.checkout.sessions.list(params);
 
     for (const session of page.data) {
-      if (session.payment_status !== 'paid') continue;
+      if (session.mode !== 'subscription' || session.payment_status !== 'paid') continue;
 
       const metaEmail    = (session.metadata && session.metadata.email   || '').trim().toLowerCase();
       const metaClubName = (session.metadata && session.metadata.clubName || '').trim();
