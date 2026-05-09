@@ -92,6 +92,27 @@
     .help-box a { color: var(--blue); text-decoration: none; font-weight: 600; }
     .help-box a:hover { text-decoration: underline; }
 
+    .billing-card {
+      background: var(--white); border-radius: 14px; padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 16px;
+    }
+    .billing-card-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+    .billing-card-desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+    .billing-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: transparent; color: var(--text); border: 1.5px solid #dde3f0;
+      border-radius: 8px; padding: 9px 18px;
+      font-size: 0.85rem; font-weight: 600; font-family: 'Montserrat', sans-serif;
+      cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    }
+    .billing-btn:hover { border-color: var(--blue); background: #f0f5ff; }
+    .billing-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cancelled-banner {
+      background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 10px;
+      padding: 14px 18px; margin-bottom: 20px;
+      font-size: 0.88rem; color: #b91c1c; font-weight: 600;
+    }
+
     footer { text-align: center; padding: 24px; font-size: 0.8rem; color: #9aaabf; }
     footer a { color: #7a8fa8; text-decoration: none; }
 
@@ -160,6 +181,22 @@
     </div>
 
     <hr class="divider">
+    <p class="section-label">Subscription</p>
+
+    <div id="cancelledBanner" class="cancelled-banner" style="display:none;">
+      Your subscription has been cancelled. Reactivate below to regain access.
+    </div>
+
+    <div class="billing-card">
+      <div class="billing-card-title">Manage your subscription</div>
+      <p class="billing-card-desc">Update payment method, download invoices, or cancel your subscription. You will be taken to Stripe's secure billing portal.</p>
+      <button class="billing-btn" id="billingBtn" onclick="openBillingPortal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Manage Subscription
+      </button>
+    </div>
+
+    <hr class="divider">
 
     <div class="help-box">
       Questions? Write to us at <a href="mailto:info@futsalplay.live">info@futsalplay.live</a> and we will help you get set up.
@@ -208,6 +245,34 @@
         btn.classList.add('copied');
         setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
       });
+    }
+
+    if (cfg.status === 'cancelled') {
+      document.getElementById('cancelledBanner').style.display = 'block';
+    }
+
+    async function openBillingPortal() {
+      const btn = document.getElementById('billingBtn');
+      btn.disabled = true;
+      btn.textContent = 'Opening...';
+      try {
+        const resp = await fetch(cfg.billingPortalPath, {
+          method: 'POST',
+          headers: { 'X-MFCLIVE-Token': window._MFCLIVE_TOKEN },
+        });
+        const data = await resp.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          alert(data.error || 'Could not open billing portal. Please try again.');
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Manage Subscription';
+        }
+      } catch (e) {
+        alert('Network error. Please try again.');
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Manage Subscription';
+      }
     }
   </script>
 </body>

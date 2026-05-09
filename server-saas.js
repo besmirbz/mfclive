@@ -128,6 +128,15 @@ db.exec(`
   );
 `);
 
+// ── DB migrations — add billing columns if not present ────────────────────────
+for (const sql of [
+  "ALTER TABLE clubs ADD COLUMN stripe_customer_id TEXT",
+  "ALTER TABLE clubs ADD COLUMN stripe_subscription_id TEXT",
+  "ALTER TABLE clubs ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+]) {
+  try { db.prepare(sql).run(); } catch (_) {}
+}
+
 // ── Admin secret — gates the /admin/* API ─────────────────────────────────────
 // Set MFCLIVE_ADMIN_SECRET env var on the server, or it falls back to a file.
 const ADMIN_SECRET_FILE = path.join(os.homedir(), '.mfclive-saas', 'admin-secret.txt');
@@ -214,6 +223,7 @@ function createRoom(clubRow) {
     slug:    clubRow.slug,
     name:    clubRow.name,
     secret:  clubRow.secret,
+    status:  clubRow.status || 'active',
     config:  cfg,
     state:   createInitialState(cfg),
     clients: new Set(),
@@ -733,6 +743,42 @@ const server = http.createServer({ maxHeaderSize: 65536 }, (req, res) => {
       res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('Forbidden'); return;
     }
 
+    // Gate all routes except account + billing-portal for cancelled subscriptions
+    if (room.status === 'cancelled' && subpath !== '/account' && subpath !== '/billing-portal') {
+      res.writeHead(402, { 'Content-Type': 'text/html' });
+      res.end(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:80px 24px;color:#1a2340;">
+        <h2 style="margin-bottom:12px;">Subscription cancelled</h2>
+        <p style="color:#5a6580;margin-bottom:24px;">Your subscription has ended.</p>
+        <a href="/clubs/${esc(room.slug)}/account?token=${esc(room.secret)}" style="background:#3D82F6;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;">Manage Account</a>
+      </body></html>`);
+      return;
+    }
+
+    // Billing portal — POST /clubs/:slug/billing-portal
+    if (subpath === '/billing-portal' && req.method === 'POST') {
+      (async () => {
+        try {
+          const clubRow = db.prepare('SELECT stripe_customer_id FROM clubs WHERE slug = ?').get(room.slug);
+          if (!clubRow || !clubRow.stripe_customer_id) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'No billing account found. Contact info@futsalplay.live.' }));
+            return;
+          }
+          const portalSession = await stripe.billingPortal.sessions.create({
+            customer:   clubRow.stripe_customer_id,
+            return_url: `https://futsalplay.live/clubs/${room.slug}/account?token=${room.secret}`,
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ url: portalSession.url }));
+        } catch (e) {
+          console.error('[billing portal]', e.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Could not open billing portal. Please try again.' }));
+        }
+      })();
+      return;
+    }
+
     // SSE stream
     if (subpath === '/events') {
       res.writeHead(200, {
@@ -1071,6 +1117,8 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
         bookmarkletPath:   `/clubs/${room.slug}/bookmarklet?token=${room.secret}`,
         overlayPath:       `/clubs/${room.slug}/overlay?token=${room.secret}`,
         accountPath:       `/clubs/${room.slug}/account?token=${room.secret}`,
+        billingPortalPath: `/clubs/${room.slug}/billing-portal`,
+        status:            room.status,
         logoHomePath:      `/clubs/${room.slug}/logo/home`,
         logoAwayPath:      `/clubs/${room.slug}/logo/away`,
       });
@@ -1171,7 +1219,12 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
             }
             const secret = crypto.randomBytes(8).toString('hex');
             const cfg    = JSON.stringify({ accentColour: '#3D82F6', numberOfPeriods: 2, periodDuration: 20 });
-            db.prepare('INSERT INTO clubs (slug, name, secret, config) VALUES (?, ?, ?, ?)').run(slug, clubName.slice(0, 80), secret, cfg);
+            db.prepare('INSERT INTO clubs (slug, name, secret, config, stripe_customer_id, stripe_subscription_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+              slug, clubName.slice(0, 80), secret, cfg,
+              session.customer || null,
+              session.subscription || null,
+              'active'
+            );
             const newClub = db.prepare('SELECT * FROM clubs WHERE slug = ?').get(slug);
             const room    = createRoom(newClub);
             rooms.set(slug, room);
@@ -1254,6 +1307,23 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
           } catch (e) {
             console.error('[signup] club creation or email failed:', e.message);
           }
+        }
+      }
+
+      if (event.type === 'customer.subscription.deleted') {
+        const sub = event.data.object;
+        const row = db.prepare('SELECT slug FROM clubs WHERE stripe_subscription_id = ?').get(sub.id);
+        if (row) {
+          db.prepare("UPDATE clubs SET status = 'cancelled' WHERE slug = ?").run(row.slug);
+          const room = rooms.get(row.slug);
+          if (room) {
+            room.status = 'cancelled';
+            for (const client of [...room.clients]) {
+              try { client.write('event: cancelled\ndata: {}\n\n'); client.end(); } catch (_) {}
+              room.clients.delete(client);
+            }
+          }
+          console.log(`[billing] Subscription cancelled: ${row.slug}`);
         }
       }
 
