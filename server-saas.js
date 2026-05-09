@@ -133,6 +133,7 @@ for (const sql of [
   "ALTER TABLE clubs ADD COLUMN stripe_customer_id TEXT",
   "ALTER TABLE clubs ADD COLUMN stripe_subscription_id TEXT",
   "ALTER TABLE clubs ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+  "ALTER TABLE clubs ADD COLUMN email TEXT",
 ]) {
   try { db.prepare(sql).run(); } catch (_) {}
 }
@@ -1219,11 +1220,12 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
             }
             const secret = crypto.randomBytes(8).toString('hex');
             const cfg    = JSON.stringify({ accentColour: '#3D82F6', numberOfPeriods: 2, periodDuration: 20 });
-            db.prepare('INSERT INTO clubs (slug, name, secret, config, stripe_customer_id, stripe_subscription_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+            db.prepare('INSERT INTO clubs (slug, name, secret, config, stripe_customer_id, stripe_subscription_id, status, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
               slug, clubName.slice(0, 80), secret, cfg,
               session.customer || null,
               session.subscription || null,
-              'active'
+              'active',
+              email.trim().toLowerCase()
             );
             const newClub = db.prepare('SELECT * FROM clubs WHERE slug = ?').get(slug);
             const room    = createRoom(newClub);
@@ -1330,6 +1332,102 @@ ${clubLabel}<h2>${esc(r.homeTeam)} vs ${esc(r.awayTeam)}</h2>
       res.writeHead(200); res.end('ok');
     });
     return;
+  }
+
+  // ── Resend links ─────────────────────────────────────────────────────────────
+  if (route === '/resend-links') {
+    if (req.method === 'GET') {
+      const fp = path.join(PUBLIC_DIR, 'resend-links.html');
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : '<h1>Page not found</h1>');
+      return;
+    }
+
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', d => { body += d; if (body.length > 4096) { res.writeHead(413); res.end(); req.socket.destroy(); } });
+      req.on('end', async () => {
+        const GENERIC_OK = JSON.stringify({ ok: true });
+        try {
+          const { email } = JSON.parse(body || '{}');
+          if (!email || typeof email !== 'string') {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Email is required.' }));
+            return;
+          }
+          const club = db.prepare('SELECT * FROM clubs WHERE email = ? AND status = ?').get(email.trim().toLowerCase(), 'active');
+          if (club) {
+            const secret         = club.secret;
+            const slug           = club.slug;
+            const clubName       = club.name;
+            const controllerUrl  = `https://futsalplay.live/clubs/${slug}/controller?token=${secret}`;
+            const wizardUrl      = `https://futsalplay.live/clubs/${slug}/wizard?token=${secret}`;
+            const overlayUrl     = `https://futsalplay.live/clubs/${slug}/overlay?token=${secret}`;
+            const accountUrl     = `https://futsalplay.live/clubs/${slug}/account?token=${secret}`;
+            await mailer.sendMail({
+              from:    '"Futsalplay.live" <info@futsalplay.live>',
+              to:      email.trim(),
+              subject: 'Your FutsalPlay links',
+              text: [
+                `Hi,`,
+                ``,
+                `Here are your links for "${clubName}".`,
+                ``,
+                `Your account page (bookmark this):`,
+                accountUrl,
+                ``,
+                `Setup Wizard:`,
+                wizardUrl,
+                ``,
+                `Controller:`,
+                controllerUrl,
+                ``,
+                `Overlay URL (OBS/Streamlabs browser source, 1920x1080):`,
+                overlayUrl,
+                ``,
+                `Questions? Reply to this email.`,
+                ``,
+                `The FutsalPlay team`,
+              ].join('\n'),
+              html: `
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1a2340;">
+                  <p style="font-family:'League Spartan',Arial,sans-serif;font-size:1.6rem;font-weight:800;letter-spacing:-0.01em;margin:0 0 24px;line-height:1;">FutsalPlay<span style="color:#3D82F6;">.live</span></p>
+                  <h2 style="font-size:1.2rem;margin-bottom:8px;">Your links for ${esc(clubName)}</h2>
+                  <p style="color:#5a6580;margin-bottom:24px;">You requested your account links. Here they are:</p>
+                  <div style="background:#050B18;border-radius:10px;padding:20px 24px;margin:0 0 16px;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:8px;">Club Account</p>
+                    <a href="${accountUrl}" style="display:inline-block;background:#3D82F6;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.9rem;">Open My Account</a>
+                    <p style="font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:10px;word-break:break-all;">${accountUrl}</p>
+                  </div>
+                  <div style="background:#F4F6FA;border-radius:10px;padding:16px 20px;margin:0 0 16px;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:6px;">Setup Wizard</p>
+                    <p style="font-size:0.75rem;color:#9aaabf;word-break:break-all;">${wizardUrl}</p>
+                  </div>
+                  <div style="background:#F4F6FA;border-radius:10px;padding:16px 20px;margin:0 0 16px;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:6px;">Controller</p>
+                    <p style="font-size:0.75rem;color:#9aaabf;word-break:break-all;">${controllerUrl}</p>
+                  </div>
+                  <div style="background:#F4F6FA;border-radius:10px;padding:16px 20px;">
+                    <p style="font-size:0.8rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#3D82F6;margin-bottom:6px;">Overlay URL</p>
+                    <p style="font-size:0.75rem;color:#9aaabf;word-break:break-all;">${overlayUrl}</p>
+                  </div>
+                  <hr style="border:none;border-top:1px solid #e4eaf5;margin:24px 0;">
+                  <p style="font-size:0.78rem;color:#9aaabf;">Futsalplay.live &mdash; You play, we stream it.</p>
+                </div>
+              `,
+            });
+          }
+          // Always respond with ok to avoid email enumeration
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(GENERIC_OK);
+        } catch (e) {
+          console.error('[resend-links]', e.message);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Something went wrong. Please try again.' }));
+        }
+      });
+      return;
+    }
   }
 
   // ── Static assets (logo etc.) ─────────────────────────────────────────────────
