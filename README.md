@@ -32,8 +32,8 @@ Two deployment modes:
 # Local
 git push
 
-# VPS
-cd /var/www/mfclive && git pull && pm2 restart mfclive-saas
+# VPS (PM2 runs as user 'mfclive', not root — use PM2_HOME)
+cd /var/www/mfclive && git pull && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 restart mfclive-saas
 ```
 
 ### Caddyfile (`/etc/caddy/Caddyfile`)
@@ -75,12 +75,12 @@ Two ecosystem configs are kept on the VPS: `ecosystem.config.js_ori` (prod) and 
 
 **Prod → Test:**
 ```bash
-mv ecosystem.config.js ecosystem.config.js_ori && mv ecosystem.config.js_test ecosystem.config.js && pm2 delete mfclive-saas && pm2 start ecosystem.config.js
+mv ecosystem.config.js ecosystem.config.js_live && mv ecosystem.config.js_test ecosystem.config.js && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 delete mfclive-saas && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 start ecosystem.config.js && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 save
 ```
 
 **Test → Prod:**
 ```bash
-mv ecosystem.config.js ecosystem.config.js_test && mv ecosystem.config.js_ori ecosystem.config.js && pm2 delete mfclive-saas && pm2 start ecosystem.config.js
+mv ecosystem.config.js ecosystem.config.js_test && mv ecosystem.config.js_live ecosystem.config.js && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 delete mfclive-saas && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 start ecosystem.config.js && PM2_HOME=/home/mfclive/.pm2 sudo -u mfclive /usr/lib/node_modules/pm2/bin/pm2 save
 ```
 
 Test card: `4242 4242 4242 4242`, any future expiry, any CVC.
